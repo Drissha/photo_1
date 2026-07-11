@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../models/captured_photo.dart';
+import '../models/photo_take.dart';
 
 class StorageService {
   Future<Directory> ensureSaveDirectory(String path) async {
@@ -22,6 +23,14 @@ class StorageService {
       await folder.create(recursive: true);
     }
     return defaultPath;
+  }
+
+  Future<String> createTakeFolder(String baseFolder) async {
+    final folder = await ensureSaveDirectory(baseFolder);
+    final stamp = DateTime.now().microsecondsSinceEpoch;
+    final takePath = p.join(folder.path, 'Take_$stamp');
+    await Directory(takePath).create(recursive: true);
+    return takePath;
   }
 
   Future<String?> pickSaveFolder() async {
@@ -52,6 +61,47 @@ class StorageService {
           ),
         )
         .toList();
+  }
+
+  Future<List<PhotoTake>> listTakeFolders(String baseFolder) async {
+    final folder = Directory(baseFolder);
+    if (!folder.existsSync()) {
+      return const [];
+    }
+
+    final takes = folder
+        .listSync()
+        .whereType<Directory>()
+        .map((takeFolder) {
+          final photoCount = takeFolder
+              .listSync()
+              .whereType<File>()
+              .where((file) => file.path.toLowerCase().endsWith('.jpg'))
+              .length;
+          return PhotoTake(
+            path: takeFolder.path,
+            name: p.basename(takeFolder.path),
+            createdAt: takeFolder.statSync().modified,
+            photoCount: photoCount,
+          );
+        })
+        .where((take) => take.photoCount > 0)
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+    final rootPhotos = await listPhotos(baseFolder);
+    if (rootPhotos.isNotEmpty) {
+      takes.add(
+        PhotoTake(
+          path: baseFolder,
+          name: 'Legacy Photos',
+          createdAt: rootPhotos.first.createdAt,
+          photoCount: rootPhotos.length,
+        ),
+      );
+    }
+
+    return takes;
   }
 
   Future<void> deletePhoto(String path) async {

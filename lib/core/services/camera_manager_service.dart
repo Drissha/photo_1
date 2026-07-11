@@ -173,6 +173,8 @@ class CameraManagerService extends ChangeNotifier {
     }
 
     _isCapturing = true;
+    _status = 'Capturing photo';
+    notifyListeners();
     try {
       final imageFile = await _controller!.takePicture();
       final fileName = '${DateTime.now().toIso8601String().replaceAll(':', '-').replaceAll('.', '-')}.jpg';

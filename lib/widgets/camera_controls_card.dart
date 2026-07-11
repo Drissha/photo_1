@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../core/services/app_providers.dart';
 import '../core/services/camera_manager_service.dart';
 import '../core/services/storage_service.dart';
 
 class CameraControlsCard extends StatefulWidget {
-  const CameraControlsCard({super.key, required this.cameraManager, required this.storageService});
+  const CameraControlsCard({super.key, required this.cameraManager});
 
   final CameraManagerService cameraManager;
-  final StorageService storageService;
 
   @override
   State<CameraControlsCard> createState() => _CameraControlsCardState();
@@ -75,7 +76,10 @@ class _CameraControlsCardState extends State<CameraControlsCard> {
               children: [
                 FilledButton.icon(
                   onPressed: () async {
-                    final path = await widget.cameraManager.capturePhoto(await widget.storageService.getDefaultSaveFolder());
+                    final settings = context.read<AppSettingsNotifier>().settings;
+                    final storageService = context.read<StorageService>();
+                    final takeFolder = await storageService.createTakeFolder(settings.saveFolderPath);
+                    final path = await widget.cameraManager.capturePhoto(takeFolder);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved $path')));
                     }

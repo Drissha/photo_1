@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -5,6 +7,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../core/services/app_providers.dart';
 import '../core/services/camera_manager_service.dart';
+import '../core/services/storage_service.dart';
 import '../core/services/troubleshooting_service.dart';
 import 'diagnostics_page.dart';
 import 'gallery_page.dart';
@@ -19,8 +22,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
+  int _galleryReloadToken = 0;
   bool _showControlPanel = false;
   bool _isFullscreen = false;
+  bool _isCaptureSessionRunning = false;
 
   @override
   void initState() {
@@ -55,6 +60,9 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
     setState(() {
       _selectedIndex = index;
+      if (index == 1) {
+        _galleryReloadToken += 1;
+      }
       _showControlPanel = false;
     });
   }
@@ -100,6 +108,143 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _startCaptureSession() async {
+    final cameraManager = context.read<CameraManagerService>();
+    final storageService = context.read<StorageService>();
+    final settings = context.read<AppSettingsNotifier>().settings;
+
+    if (!cameraManager.isInitialized || _isCaptureSessionRunning) {
+      return;
+    }
+
+    final options = await _showCaptureOptionsDialog(
+      defaultCount: 3,
+      defaultCountdown: settings.autoCaptureDelaySeconds,
+    );
+    if (options == null || !mounted) return;
+
+    setState(() => _isCaptureSessionRunning = true);
+    try {
+      final takeFolder = await storageService.createTakeFolder(settings.saveFolderPath);
+      final savedPaths = <String>[];
+      for (var index = 0; index < options.photoCount; index++) {
+        if (options.countdownSeconds > 0) {
+          await showDialog<void>(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogContext) => _CountdownDialog(
+              seconds: options.countdownSeconds,
+              currentShot: index + 1,
+              totalShots: options.photoCount,
+            ),
+          );
+        }
+
+        final path = await cameraManager.capturePhoto(takeFolder);
+        savedPaths.add(path);
+
+        if (index < options.photoCount - 1) {
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+      }
+
+      if (mounted) {
+        if (_selectedIndex == 1) {
+          _galleryReloadToken += 1;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Saved ${savedPaths.length} photo(s) in ${Uri.file(takeFolder).pathSegments.last}')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Capture failed: $error')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isCaptureSessionRunning = false);
+      }
+    }
+  }
+
+  Future<_CaptureSessionOptions?> _showCaptureOptionsDialog({
+    required int defaultCount,
+    required int defaultCountdown,
+  }) {
+    return showDialog<_CaptureSessionOptions>(
+      context: context,
+      builder: (dialogContext) {
+        var selectedCount = defaultCount;
+        var selectedCountdown = defaultCountdown;
+
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Capture Options'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<int>(
+                    value: selectedCount,
+                    decoration: const InputDecoration(
+                      labelText: 'Jumlah foto',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [1, 2, 3, 5, 10]
+                        .map((count) => DropdownMenuItem(value: count, child: Text('$count foto')))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() => selectedCount = value);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    value: selectedCountdown,
+                    decoration: const InputDecoration(
+                      labelText: 'Countdown',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [0, 3, 5, 10]
+                        .map((seconds) => DropdownMenuItem(
+                              value: seconds,
+                              child: Text(seconds == 0 ? 'Tanpa countdown' : '$seconds detik'),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() => selectedCountdown = value);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Batal'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.pop(
+                      dialogContext,
+                      _CaptureSessionOptions(
+                        photoCount: selectedCount,
+                        countdownSeconds: selectedCountdown,
+                      ),
+                    );
+                  },
+                  child: const Text('Mulai'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cameraManager = context.watch<CameraManagerService>();
@@ -107,7 +252,7 @@ class _HomePageState extends State<HomePage> {
 
     final pages = <Widget>[
       _buildCameraPage(cameraManager),
-      _buildSafePage(const GalleryPage()),
+      _buildSafePage(GalleryPage(key: ValueKey(_galleryReloadToken))),
       _buildSafePage(const SettingsPage()),
       _buildSafePage(const DiagnosticsPage()),
     ];
@@ -161,13 +306,8 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   FloatingActionButton.extended(
                     heroTag: 'capture-photo',
-                    onPressed: cameraManager.isInitialized
-                        ? () async {
-                            final path = await cameraManager.capturePhoto(settings.saveFolderPath);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved $path')));
-                            }
-                          }
+                    onPressed: cameraManager.isInitialized && !_isCaptureSessionRunning
+                        ? _startCaptureSession
                         : null,
                     icon: const Icon(Icons.camera_alt_outlined, size: 28),
                     label: const Padding(
@@ -353,6 +493,89 @@ class _HomePageState extends State<HomePage> {
           '$label: $value',
           style: const TextStyle(color: Colors.white),
         ),
+      ),
+    );
+  }
+}
+
+class _CaptureSessionOptions {
+  const _CaptureSessionOptions({
+    required this.photoCount,
+    required this.countdownSeconds,
+  });
+
+  final int photoCount;
+  final int countdownSeconds;
+}
+
+class _CountdownDialog extends StatefulWidget {
+  const _CountdownDialog({
+    required this.seconds,
+    required this.currentShot,
+    required this.totalShots,
+  });
+
+  final int seconds;
+  final int currentShot;
+  final int totalShots;
+
+  @override
+  State<_CountdownDialog> createState() => _CountdownDialogState();
+}
+
+class _CountdownDialogState extends State<_CountdownDialog> {
+  Timer? _timer;
+  late int _remainingSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _remainingSeconds = widget.seconds;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_remainingSeconds <= 1) {
+        timer.cancel();
+        Navigator.of(context).pop();
+        return;
+      }
+      setState(() => _remainingSeconds -= 1);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: Colors.black.withOpacity(0.9),
+      title: Text(
+        'Foto ${widget.currentShot} dari ${widget.totalShots}',
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: Colors.white),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.timer_outlined, size: 56, color: Colors.white),
+          const SizedBox(height: 16),
+          Text(
+            _remainingSeconds.toString(),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 64,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Siap-siap!',
+            style: TextStyle(color: Colors.white70),
+          ),
+        ],
       ),
     );
   }
