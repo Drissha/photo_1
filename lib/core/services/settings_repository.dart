@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../constants/app_constants.dart';
 import '../models/app_settings.dart';
 
 abstract class SettingsRepository {
@@ -35,7 +36,9 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
       saveFolderPath: decoded['saveFolderPath']?.toString() ?? 'C:/Users/Public/Pictures/Papyrus',
       defaultCameraName: decoded['defaultCameraName']?.toString() ?? '',
       autoStartCamera: decoded['autoStartCamera'] as bool? ?? true,
-      autoCaptureDelaySeconds: decoded['autoCaptureDelaySeconds'] as int? ?? 3,
+      autoCaptureDelaySeconds: decoded['autoCaptureDelaySeconds'] as int? ?? AppConstants.autoCaptureDelaySeconds,
+      capturePreviewDurationSeconds:
+          decoded['capturePreviewDurationSeconds'] as int? ?? AppConstants.capturePreviewDurationSeconds,
       autoRetry: decoded['autoRetry'] as bool? ?? true,
       cameraBrightness: (decoded['cameraBrightness'] as num?)?.toDouble() ?? 0.5,
       cameraContrast: (decoded['cameraContrast'] as num?)?.toDouble() ?? 0.5,
@@ -66,6 +69,7 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
       'defaultCameraName': settings.defaultCameraName,
       'autoStartCamera': settings.autoStartCamera,
       'autoCaptureDelaySeconds': settings.autoCaptureDelaySeconds,
+      'capturePreviewDurationSeconds': settings.capturePreviewDurationSeconds,
       'autoRetry': settings.autoRetry,
       'cameraBrightness': settings.cameraBrightness,
       'cameraContrast': settings.cameraContrast,

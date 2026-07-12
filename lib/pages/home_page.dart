@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
@@ -10,11 +11,21 @@ import '../core/services/camera_manager_service.dart';
 import '../core/services/storage_service.dart';
 import '../core/services/troubleshooting_service.dart';
 import 'diagnostics_page.dart';
+import 'edit_page.dart';
 import 'gallery_page.dart';
 import 'settings_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({
+    super.key,
+    required this.packageName,
+    required this.photoCount,
+    required this.initialLayoutKey,
+  });
+
+  final String packageName;
+  final int photoCount;
+  final String initialLayoutKey;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -26,17 +37,62 @@ class _HomePageState extends State<HomePage> {
   bool _showControlPanel = false;
   bool _isFullscreen = false;
   bool _isCaptureSessionRunning = false;
+  AppSettingsNotifier? _settingsNotifier;
+  String? _lastAppliedDefaultCameraName;
+  bool _isSyncingCamera = false;
+  bool _cameraSyncQueued = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final cameraManager = context.read<CameraManagerService>();
-      final troubleshooter = context.read<TroubleshootingService>();
-      await cameraManager.initializeCamera();
-      troubleshooter.startMonitoring();
-      await _syncFullscreenState();
+      if (!mounted) return;
+      _settingsNotifier = context.read<AppSettingsNotifier>();
+      _settingsNotifier!.addListener(_syncCameraWithSettings);
+      await _syncCameraWithSettings();
     });
+  }
+
+  @override
+  void dispose() {
+    _settingsNotifier?.removeListener(_syncCameraWithSettings);
+    super.dispose();
+  }
+
+  Future<void> _syncCameraWithSettings() async {
+    if (!mounted) return;
+    if (_isSyncingCamera) {
+      _cameraSyncQueued = true;
+      return;
+    }
+
+    _isSyncingCamera = true;
+    try {
+      do {
+        _cameraSyncQueued = false;
+
+        final cameraManager = context.read<CameraManagerService>();
+        final troubleshooter = context.read<TroubleshootingService>();
+        final settings = context.read<AppSettingsNotifier>().settings;
+        final preferredCameraName = settings.defaultCameraName.trim().isEmpty
+            ? null
+            : settings.defaultCameraName.trim();
+
+        if (_lastAppliedDefaultCameraName == preferredCameraName &&
+            cameraManager.selectedDevice?.name == preferredCameraName &&
+            cameraManager.isInitialized) {
+          continue;
+        }
+
+        _lastAppliedDefaultCameraName = preferredCameraName;
+
+        await cameraManager.initializeCamera(cameraName: preferredCameraName);
+        troubleshooter.startMonitoring();
+        await _syncFullscreenState();
+      } while (_cameraSyncQueued && mounted);
+    } finally {
+      _isSyncingCamera = false;
+    }
   }
 
   Future<void> _syncFullscreenState() async {
@@ -50,6 +106,10 @@ class _HomePageState extends State<HomePage> {
     await windowManager.setFullScreen(nextValue);
     if (!mounted) return;
     setState(() => _isFullscreen = nextValue);
+  }
+
+  Future<void> _exitApp() async {
+    await windowManager.close();
   }
 
   void _toggleControlPanel() {
@@ -82,21 +142,6 @@ class _HomePageState extends State<HomePage> {
                 title: const Text('Camera'),
                 onTap: () => Navigator.pop(sheetContext, 0),
               ),
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Gallery'),
-                onTap: () => Navigator.pop(sheetContext, 1),
-              ),
-              ListTile(
-                leading: const Icon(Icons.settings_outlined),
-                title: const Text('Settings'),
-                onTap: () => Navigator.pop(sheetContext, 2),
-              ),
-              ListTile(
-                leading: const Icon(Icons.health_and_safety_outlined),
-                title: const Text('Diagnostics'),
-                onTap: () => Navigator.pop(sheetContext, 3),
-              ),
             ],
           ),
         );
@@ -118,42 +163,74 @@ class _HomePageState extends State<HomePage> {
     }
 
     final options = await _showCaptureOptionsDialog(
-      defaultCount: 3,
       defaultCountdown: settings.autoCaptureDelaySeconds,
+      defaultLayoutKey: widget.initialLayoutKey,
     );
     if (options == null || !mounted) return;
 
     setState(() => _isCaptureSessionRunning = true);
     try {
       final takeFolder = await storageService.createTakeFolder(settings.saveFolderPath);
+      if (!mounted) return;
       final savedPaths = <String>[];
-      for (var index = 0; index < options.photoCount; index++) {
-        if (options.countdownSeconds > 0) {
-          await showDialog<void>(
-            context: context,
-            barrierDismissible: false,
-            builder: (dialogContext) => _CountdownDialog(
-              seconds: options.countdownSeconds,
-              currentShot: index + 1,
-              totalShots: options.photoCount,
-            ),
+      for (var index = 0; index < widget.photoCount; index++) {
+        var accepted = false;
+        while (!accepted) {
+          if (options.countdownSeconds > 0) {
+            await showDialog<void>(
+              context: context,
+              barrierDismissible: false,
+              builder: (dialogContext) => _CountdownDialog(
+                seconds: options.countdownSeconds,
+                currentShot: index + 1,
+                totalShots: widget.photoCount,
+              ),
+            );
+          }
+
+          final path = await cameraManager.capturePhoto(takeFolder);
+          if (!mounted) {
+            try {
+              await File(path).delete();
+            } catch (_) {}
+            return;
+          }
+          final previewAction = await _showCapturePreviewDialog(
+            imagePath: path,
+            shotIndex: index + 1,
+            totalShots: widget.photoCount,
+            previewSeconds: settings.capturePreviewDurationSeconds,
           );
+
+          if (!mounted) return;
+          if (previewAction == _CapturePreviewAction.retake) {
+            try {
+              await File(path).delete();
+            } catch (_) {
+              // Ignore cleanup failures and allow the user to retake.
+            }
+            continue;
+          }
+
+          savedPaths.add(path);
+          accepted = true;
         }
 
-        final path = await cameraManager.capturePhoto(takeFolder);
-        savedPaths.add(path);
-
-        if (index < options.photoCount - 1) {
+        if (index < widget.photoCount - 1) {
           await Future.delayed(const Duration(milliseconds: 500));
         }
       }
 
       if (mounted) {
-        if (_selectedIndex == 1) {
-          _galleryReloadToken += 1;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Saved ${savedPaths.length} photo(s) in ${Uri.file(takeFolder).pathSegments.last}')),
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => EditPage(
+              photoPaths: savedPaths,
+              takeFolderPath: takeFolder,
+              takeFolderName: Uri.file(takeFolder).pathSegments.last,
+              initialLayoutKey: options.layoutKey,
+            ),
+          ),
         );
       }
     } catch (error) {
@@ -170,34 +247,54 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<_CaptureSessionOptions?> _showCaptureOptionsDialog({
-    required int defaultCount,
     required int defaultCountdown,
+    required String defaultLayoutKey,
   }) {
     return showDialog<_CaptureSessionOptions>(
       context: context,
       builder: (dialogContext) {
-        var selectedCount = defaultCount;
         var selectedCountdown = defaultCountdown;
+        var selectedLayoutKey = defaultLayoutKey;
+        const layoutChoices = [
+          _LayoutChoice(key: 'grid', label: 'Grid 2x2', description: 'Rapi dan seimbang'),
+          _LayoutChoice(key: 'vertical', label: 'Vertical Strip', description: 'Memanjang ke bawah'),
+          _LayoutChoice(key: 'horizontal', label: 'Horizontal Strip', description: 'Memanjang ke samping'),
+          _LayoutChoice(key: 'polaroid', label: 'Polaroid', description: 'Frame putih klasik'),
+        ];
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
+            final countdownChoices = <int>{0, 3, 5, 10, selectedCountdown}.toList()..sort();
             return AlertDialog(
-              title: const Text('Capture Options'),
+              title: Text('Capture Options - ${widget.packageName}'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DropdownButtonFormField<int>(
-                    value: selectedCount,
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Jumlah foto dari paket: ${widget.photoCount}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedLayoutKey,
                     decoration: const InputDecoration(
-                      labelText: 'Jumlah foto',
+                      labelText: 'Layout awal',
                       border: OutlineInputBorder(),
                     ),
-                    items: const [1, 2, 3, 5, 10]
-                        .map((count) => DropdownMenuItem(value: count, child: Text('$count foto')))
+                    items: layoutChoices
+                        .map(
+                          (layout) => DropdownMenuItem(
+                            value: layout.key,
+                            child: Text('${layout.label} - ${layout.description}'),
+                          ),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value == null) return;
-                      setDialogState(() => selectedCount = value);
+                      setDialogState(() => selectedLayoutKey = value);
                     },
                   ),
                   const SizedBox(height: 16),
@@ -207,7 +304,7 @@ class _HomePageState extends State<HomePage> {
                       labelText: 'Countdown',
                       border: OutlineInputBorder(),
                     ),
-                    items: const [0, 3, 5, 10]
+                    items: countdownChoices
                         .map((seconds) => DropdownMenuItem(
                               value: seconds,
                               child: Text(seconds == 0 ? 'Tanpa countdown' : '$seconds detik'),
@@ -230,8 +327,8 @@ class _HomePageState extends State<HomePage> {
                     Navigator.pop(
                       dialogContext,
                       _CaptureSessionOptions(
-                        photoCount: selectedCount,
                         countdownSeconds: selectedCountdown,
+                        layoutKey: selectedLayoutKey,
                       ),
                     );
                   },
@@ -245,10 +342,28 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<_CapturePreviewAction> _showCapturePreviewDialog({
+    required String imagePath,
+    required int shotIndex,
+    required int totalShots,
+    required int previewSeconds,
+  }) {
+    return showDialog<_CapturePreviewAction>(
+      context: context,
+      barrierDismissible: false,
+      useSafeArea: false,
+      builder: (dialogContext) => _CapturePreviewDialog(
+        imagePath: imagePath,
+        shotIndex: shotIndex,
+        totalShots: totalShots,
+        previewSeconds: previewSeconds,
+      ),
+    ).then((result) => result ?? _CapturePreviewAction.continueShot);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cameraManager = context.watch<CameraManagerService>();
-    final settings = context.watch<AppSettingsNotifier>().settings;
 
     final pages = <Widget>[
       _buildCameraPage(cameraManager),
@@ -345,7 +460,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildSafePage(Widget child) {
     return SafeArea(
-      minimum: const EdgeInsets.all(28),
+      minimum: const EdgeInsets.all(40),
       child: child,
     );
   }
@@ -407,6 +522,11 @@ class _HomePageState extends State<HomePage> {
                     : (cameraName) async {
                         if (cameraName == null) return;
                         await cameraManager.switchCamera(cameraName);
+                        if (!mounted || cameraManager.selectedDevice?.name != cameraName) return;
+                        final notifier = context.read<AppSettingsNotifier>();
+                        await notifier.updateSettings(
+                          notifier.settings.copyWith(defaultCameraName: cameraName),
+                        );
                       },
               ),
               const SizedBox(height: 12),
@@ -424,10 +544,15 @@ class _HomePageState extends State<HomePage> {
                     icon: const Icon(Icons.link),
                     label: const Text('Reconnect'),
                   ),
-                  OutlinedButton.icon(
+                  FilledButton.tonalIcon(
                     onPressed: _toggleFullscreen,
                     icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
                     label: Text(_isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: _exitApp,
+                    icon: const Icon(Icons.power_settings_new),
+                    label: const Text('Exit App'),
                   ),
                 ],
               ),
@@ -500,12 +625,202 @@ class _HomePageState extends State<HomePage> {
 
 class _CaptureSessionOptions {
   const _CaptureSessionOptions({
-    required this.photoCount,
     required this.countdownSeconds,
+    required this.layoutKey,
   });
 
-  final int photoCount;
   final int countdownSeconds;
+  final String layoutKey;
+}
+
+class _LayoutChoice {
+  const _LayoutChoice({
+    required this.key,
+    required this.label,
+    required this.description,
+  });
+
+  final String key;
+  final String label;
+  final String description;
+}
+
+enum _CapturePreviewAction {
+  continueShot,
+  retake,
+}
+
+class _CapturePreviewDialog extends StatefulWidget {
+  const _CapturePreviewDialog({
+    required this.imagePath,
+    required this.shotIndex,
+    required this.totalShots,
+    required this.previewSeconds,
+  });
+
+  final String imagePath;
+  final int shotIndex;
+  final int totalShots;
+  final int previewSeconds;
+
+  @override
+  State<_CapturePreviewDialog> createState() => _CapturePreviewDialogState();
+}
+
+class _CapturePreviewDialogState extends State<_CapturePreviewDialog> {
+  Timer? _timer;
+  late int _remainingSeconds;
+
+  @override
+  void initState() {
+    super.initState();
+    _remainingSeconds = widget.previewSeconds;
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      if (_remainingSeconds <= 1) {
+        timer.cancel();
+        Navigator.of(context).pop(_CapturePreviewAction.continueShot);
+        return;
+      }
+      setState(() => _remainingSeconds -= 1);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _finish(_CapturePreviewAction action) {
+    _timer?.cancel();
+    Navigator.of(context).pop(action);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog.fullscreen(
+      backgroundColor: Colors.black,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF111111),
+                    Color(0xFF000000),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Hasil ${widget.shotIndex} dari ${widget.totalShots}',
+                              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Pilih retake atau lanjut. Otomatis lanjut dalam $_remainingSeconds detik.',
+                              style: const TextStyle(color: Colors.white70),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                        ),
+                        child: Text(
+                          '$_remainingSeconds',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1100, maxHeight: 760),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: Container(
+                            color: const Color(0xFF050505),
+                            child: Image.file(
+                              File(widget.imagePath),
+                              fit: BoxFit.contain,
+                              width: double.infinity,
+                              height: double.infinity,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: BorderSide(color: Colors.white.withOpacity(0.32), width: 1.4),
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                          ),
+                          onPressed: () => _finish(_CapturePreviewAction.retake),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retake'),
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: const Color(0xFFEAEAEA),
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                          ),
+                          onPressed: () => _finish(_CapturePreviewAction.continueShot),
+                          icon: const Icon(Icons.check_circle_outline),
+                          label: const Text('Use Photo'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _CountdownDialog extends StatefulWidget {

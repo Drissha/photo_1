@@ -153,68 +153,76 @@ class _GalleryPageState extends State<GalleryPage> {
         .where((take) => take.name.toLowerCase().contains(_query.toLowerCase()))
         .toList();
 
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          Row(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Gallery'),
+      ),
+      body: SafeArea(
+        minimum: const EdgeInsets.all(40),
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Column(
             children: [
-              Expanded(
-                child: TextField(
-                  decoration: const InputDecoration(labelText: 'Search takes'),
-                  onChanged: (value) => setState(() => _query = value),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      decoration: const InputDecoration(labelText: 'Search takes'),
+                      onChanged: (value) => setState(() => _query = value),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    onPressed: () => _loadTakes(force: true),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Refresh'),
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              FilledButton.icon(
-                onPressed: () => _loadTakes(force: true),
-                icon: const Icon(Icons.refresh),
-                label: const Text('Refresh'),
+              const SizedBox(height: 16),
+              Expanded(
+                child: filteredTakes.isEmpty
+                    ? const Center(
+                        child: Text('Belum ada sesi foto di folder galeri.'),
+                      )
+                    : GridView.builder(
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 16,
+                          mainAxisSpacing: 16,
+                        ),
+                        itemCount: filteredTakes.length,
+                        itemBuilder: (context, index) {
+                          final take = filteredTakes[index];
+                          return InkWell(
+                            onTap: () => _openTake(take),
+                            child: Card(
+                              clipBehavior: Clip.antiAlias,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  Expanded(
+                                    child: Container(
+                                      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                                      child: const Center(
+                                        child: Icon(Icons.photo_library_outlined, size: 56),
+                                      ),
+                                    ),
+                                  ),
+                                  ListTile(
+                                    title: Text(take.name, overflow: TextOverflow.ellipsis),
+                                    subtitle: Text('${take.photoCount} foto'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: filteredTakes.isEmpty
-                ? const Center(
-                    child: Text('Belum ada sesi foto di folder galeri.'),
-                  )
-                : GridView.builder(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 16,
-                      mainAxisSpacing: 16,
-                    ),
-                    itemCount: filteredTakes.length,
-                    itemBuilder: (context, index) {
-                      final take = filteredTakes[index];
-                      return InkWell(
-                        onTap: () => _openTake(take),
-                        child: Card(
-                          clipBehavior: Clip.antiAlias,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                  child: const Center(
-                                    child: Icon(Icons.photo_library_outlined, size: 56),
-                                  ),
-                                ),
-                              ),
-                              ListTile(
-                                title: Text(take.name, overflow: TextOverflow.ellipsis),
-                                subtitle: Text('${take.photoCount} foto'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-        ],
+        ),
       ),
     );
   }

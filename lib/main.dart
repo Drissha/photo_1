@@ -4,7 +4,7 @@ import 'package:window_manager/window_manager.dart';
 
 import 'core/services/app_providers.dart';
 import 'core/theme/app_theme.dart';
-import 'pages/home_page.dart';
+import 'pages/landing_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -42,7 +42,7 @@ class PapyrusPhotoboothApp extends StatelessWidget {
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: settings.themeMode,
-            home: const HomePage(),
+            home: const LandingPage(),
           );
         },
       ),

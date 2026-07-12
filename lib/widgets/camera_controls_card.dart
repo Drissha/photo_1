@@ -67,6 +67,11 @@ class _CameraControlsCardState extends State<CameraControlsCard> {
                   : (cameraName) async {
                       if (cameraName == null) return;
                       await widget.cameraManager.switchCamera(cameraName);
+                      if (!context.mounted || widget.cameraManager.selectedDevice?.name != cameraName) return;
+                      final notifier = context.read<AppSettingsNotifier>();
+                      await notifier.updateSettings(
+                        notifier.settings.copyWith(defaultCameraName: cameraName),
+                      );
                     },
             ),
             const SizedBox(height: 16),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../constants/app_constants.dart';
+
 class AppSettings {
   const AppSettings({
     this.themeMode = ThemeMode.dark,
@@ -7,7 +9,8 @@ class AppSettings {
     this.saveFolderPath = 'C:/Users/Public/Pictures/Papyrus',
     this.defaultCameraName = '',
     this.autoStartCamera = true,
-    this.autoCaptureDelaySeconds = 3,
+    this.autoCaptureDelaySeconds = AppConstants.autoCaptureDelaySeconds,
+    this.capturePreviewDurationSeconds = AppConstants.capturePreviewDurationSeconds,
     this.autoRetry = true,
     this.cameraBrightness = 0.5,
     this.cameraContrast = 0.5,
@@ -33,6 +36,7 @@ class AppSettings {
   final String defaultCameraName;
   final bool autoStartCamera;
   final int autoCaptureDelaySeconds;
+  final int capturePreviewDurationSeconds;
   final bool autoRetry;
 
   final double cameraBrightness;
@@ -59,6 +63,7 @@ class AppSettings {
     String? defaultCameraName,
     bool? autoStartCamera,
     int? autoCaptureDelaySeconds,
+    int? capturePreviewDurationSeconds,
     bool? autoRetry,
     double? cameraBrightness,
     double? cameraContrast,
@@ -85,6 +90,8 @@ class AppSettings {
       autoStartCamera: autoStartCamera ?? this.autoStartCamera,
       autoCaptureDelaySeconds:
           autoCaptureDelaySeconds ?? this.autoCaptureDelaySeconds,
+      capturePreviewDurationSeconds:
+          capturePreviewDurationSeconds ?? this.capturePreviewDurationSeconds,
       autoRetry: autoRetry ?? this.autoRetry,
       cameraBrightness: cameraBrightness ?? this.cameraBrightness,
       cameraContrast: cameraContrast ?? this.cameraContrast,

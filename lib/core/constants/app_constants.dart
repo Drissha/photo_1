@@ -9,5 +9,6 @@ class AppConstants {
   static const int healthCheckIntervalSeconds = 1;
   static const int reconnectDelaySeconds = 2;
   static const int autoCaptureDelaySeconds = 3;
+  static const int capturePreviewDurationSeconds = 3;
   static const int maxRecentPhotos = 24;
 }
