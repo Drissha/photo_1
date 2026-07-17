@@ -4,6 +4,7 @@ class AppConstants {
   static const String appName = 'Papyrus Photobooth';
   static const String defaultSaveFolderName = 'Papyrus';
   static const String defaultSaveFolderPath = 'C:/Users/Public/Pictures/Papyrus';
+  static const String defaultBackgroundFolderName = 'PapyrusBackgrounds';
   static const String logsDirectoryName = 'logs';
   static const String diagnosticsRoute = '/diagnostics';
   static const int healthCheckIntervalSeconds = 1;

@@ -25,43 +25,53 @@ class _LandingPageState extends State<LandingPage> {
 
   final List<_PackageOption> _packages = const [
     _PackageOption(
-      id: 'basic',
-      title: 'Basic',
-      subtitle: 'Cocok untuk sesi cepat',
-      price: 50000,
-      durationMinutes: 10,
-      photos: 3,
+      id: 'wanted1',
+      title: 'Wanted 1x Take',
+      subtitle: '1 foto tunggal',
+      price: 25000,
+      durationMinutes: 5,
+      photos: 1,
       accentColor: Color(0xFFFFC857),
     ),
     _PackageOption(
-      id: 'standard',
-      title: 'Standard',
-      subtitle: 'Pilihan paling populer',
-      price: 75000,
-      durationMinutes: 20,
-      photos: 6,
+      id: 'wanted2',
+      title: 'Wanted 2x Take',
+      subtitle: '2 foto berpasangan',
+      price: 40000,
+      durationMinutes: 7,
+      photos: 2,
       accentColor: Color(0xFF7AE582),
     ),
     _PackageOption(
-      id: 'premium',
-      title: 'Premium',
-      subtitle: 'Sesi lengkap dengan bonus',
-      price: 120000,
-      durationMinutes: 30,
-      photos: 10,
+      id: 'wanted3',
+      title: 'Wanted 3x Take',
+      subtitle: '3 foto paling seimbang',
+      price: 55000,
+      durationMinutes: 10,
+      photos: 3,
       accentColor: Color(0xFF7BDFF2),
+    ),
+    _PackageOption(
+      id: 'wanted4',
+      title: 'Wanted 4x Take',
+      subtitle: '4 foto gaya grid',
+      price: 70000,
+      durationMinutes: 14,
+      photos: 4,
+      accentColor: Color(0xFFF4B942),
+    ),
+    _PackageOption(
+      id: 'wanted6',
+      title: 'Wanted 6x Take',
+      subtitle: '6 foto full session',
+      price: 90000,
+      durationMinutes: 20,
+      photos: 6,
+      accentColor: Color(0xFFFF8A5B),
     ),
   ];
 
-  final List<_LayoutOption> _layoutOptions = const [
-    _LayoutOption(key: 'grid', title: 'Grid 2x2', subtitle: 'Rapi dan seimbang'),
-    _LayoutOption(key: 'vertical', title: 'Vertical Strip', subtitle: 'Memanjang ke bawah'),
-    _LayoutOption(key: 'horizontal', title: 'Horizontal Strip', subtitle: 'Memanjang ke samping'),
-    _LayoutOption(key: 'polaroid', title: 'Polaroid', subtitle: 'Frame putih klasik'),
-  ];
-
   late _PackageOption _selectedPackage;
-  late _LayoutOption _selectedLayout;
   String? _appliedVoucher;
   double _voucherDiscount = 0;
   bool _isFullscreen = false;
@@ -74,8 +84,7 @@ class _LandingPageState extends State<LandingPage> {
       _syncFullscreenState();
       context.read<CameraManagerService>().refreshDevices();
     });
-    _selectedPackage = _packages[1];
-    _selectedLayout = _layoutOptions.first;
+    _selectedPackage = _packages[2];
   }
 
   @override
@@ -103,12 +112,6 @@ class _LandingPageState extends State<LandingPage> {
   void _selectPackage(_PackageOption package) {
     setState(() {
       _selectedPackage = package;
-    });
-  }
-
-  void _selectLayout(_LayoutOption layout) {
-    setState(() {
-      _selectedLayout = layout;
     });
   }
 
@@ -144,10 +147,10 @@ class _LandingPageState extends State<LandingPage> {
   Future<void> _goToQrisPayment() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => QrisPaymentPage(
+      builder: (_) => QrisPaymentPage(
           packageName: _selectedPackage.title,
           photoCount: _selectedPackage.photos,
-          initialLayoutKey: _selectedLayout.key,
+          initialLayoutKey: _selectedPackage.id,
           basePrice: _basePrice,
           discountAmount: _discountAmount,
           finalPrice: _finalPrice,
@@ -338,7 +341,7 @@ class _LandingPageState extends State<LandingPage> {
               ),
               const SizedBox(height: 22),
               Text(
-                'Voucher, paket, lalu bayar QRIS sebelum masuk ke kamera.',
+                'Pilih Wanted Take, lalu bayar QRIS sebelum masuk ke kamera.',
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
@@ -347,7 +350,7 @@ class _LandingPageState extends State<LandingPage> {
               ),
               const SizedBox(height: 16),
               Text(
-                'Halaman ini jadi gerbang awal. Pengunjung bisa input voucher, pilih paket sesi, lalu scan QRIS untuk melanjutkan ke sesi foto.',
+                'Halaman ini jadi gerbang awal. Pengunjung bisa input voucher, pilih take session, lalu scan QRIS untuk melanjutkan ke sesi foto.',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: Colors.white70,
                       height: 1.5,
@@ -361,12 +364,12 @@ class _LandingPageState extends State<LandingPage> {
             runSpacing: 12,
             children: const [
               _StepChip(number: '01', label: 'Masukkan voucher'),
-              _StepChip(number: '02', label: 'Pilih paket'),
+              _StepChip(number: '02', label: 'Pilih take'),
               _StepChip(number: '03', label: 'Bayar QRIS'),
               _StepChip(number: '04', label: 'Masuk kamera'),
             ],
           ),
-          const SizedBox(height: 28),
+              const SizedBox(height: 28),
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -381,7 +384,7 @@ class _LandingPageState extends State<LandingPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Paket terpilih',
+                        'Wanted take terpilih',
                         style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Colors.white60),
                       ),
                       const SizedBox(height: 8),
@@ -394,7 +397,7 @@ class _LandingPageState extends State<LandingPage> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '${_selectedPackage.durationMinutes} menit, ${_selectedPackage.photos} foto, cocok untuk sesi fotobooth',
+                        '${_selectedPackage.durationMinutes} menit, ${_selectedPackage.photos} foto take',
                         style: const TextStyle(color: Colors.white70),
                       ),
                     ],
@@ -458,13 +461,18 @@ class _LandingPageState extends State<LandingPage> {
             _buildVoucherSection(context),
             const SizedBox(height: 18),
             Text(
-              'Pilih Paket',
+              'Pilih Wanted Take',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
                   ),
             ),
             const SizedBox(height: 12),
+            Text(
+              'Pilih jumlah take yang paling pas untuk layout Wanted.',
+              style: const TextStyle(color: Colors.white70, height: 1.4),
+            ),
+            const SizedBox(height: 10),
             ..._packages.map(
               (package) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
@@ -477,45 +485,6 @@ class _LandingPageState extends State<LandingPage> {
             ),
             const SizedBox(height: 8),
             _buildSummaryCard(context),
-            const SizedBox(height: 16),
-            Text(
-              'Choose Layout',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: _layoutOptions
-                  .map(
-                    (layout) => ChoiceChip(
-                      selected: layout.key == _selectedLayout.key,
-                      selectedColor: const Color(0xFFFFC857),
-                      backgroundColor: Colors.black.withOpacity(0.18),
-                      side: BorderSide(color: Colors.white.withOpacity(0.12)),
-                      label: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(layout.title),
-                          Text(
-                            layout.subtitle,
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                        ],
-                      ),
-                      labelStyle: TextStyle(
-                        color: layout.key == _selectedLayout.key ? Colors.black : Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      onSelected: (_) => _selectLayout(layout),
-                    ),
-                  )
-                  .toList(),
-            ),
             const SizedBox(height: 16),
             FilledButton.icon(
               onPressed: _goToQrisPayment,
@@ -604,15 +573,15 @@ class _LandingPageState extends State<LandingPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Ringkasan Pembayaran',
+            'Ringkasan Take',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
                 ),
           ),
           const SizedBox(height: 14),
-          _SummaryRow(label: 'Paket', value: _selectedPackage.title),
-          _SummaryRow(label: 'Harga paket', value: _formatCurrency(_basePrice)),
+          _SummaryRow(label: 'Take', value: _selectedPackage.title),
+          _SummaryRow(label: 'Harga', value: _formatCurrency(_basePrice)),
           _SummaryRow(
             label: 'Diskon voucher',
             value: _discountAmount == 0 ? '-' : '- ${_formatCurrency(_discountAmount)}',
@@ -662,18 +631,6 @@ class _PackageOption {
   final int durationMinutes;
   final int photos;
   final Color accentColor;
-}
-
-class _LayoutOption {
-  const _LayoutOption({
-    required this.key,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String key;
-  final String title;
-  final String subtitle;
 }
 
 class _PackageCard extends StatelessWidget {

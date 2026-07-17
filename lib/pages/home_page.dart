@@ -173,7 +173,7 @@ class _HomePageState extends State<HomePage> {
       final takeFolder = await storageService.createTakeFolder(settings.saveFolderPath);
       if (!mounted) return;
       final savedPaths = <String>[];
-      for (var index = 0; index < widget.photoCount; index++) {
+      for (var index = 0; index < options.photoCount; index++) {
         var accepted = false;
         while (!accepted) {
           if (options.countdownSeconds > 0) {
@@ -183,7 +183,7 @@ class _HomePageState extends State<HomePage> {
               builder: (dialogContext) => _CountdownDialog(
                 seconds: options.countdownSeconds,
                 currentShot: index + 1,
-                totalShots: widget.photoCount,
+                totalShots: options.photoCount,
               ),
             );
           }
@@ -198,7 +198,7 @@ class _HomePageState extends State<HomePage> {
           final previewAction = await _showCapturePreviewDialog(
             imagePath: path,
             shotIndex: index + 1,
-            totalShots: widget.photoCount,
+            totalShots: options.photoCount,
             previewSeconds: settings.capturePreviewDurationSeconds,
           );
 
@@ -216,7 +216,7 @@ class _HomePageState extends State<HomePage> {
           accepted = true;
         }
 
-        if (index < widget.photoCount - 1) {
+        if (index < options.photoCount - 1) {
           await Future.delayed(const Duration(milliseconds: 500));
         }
       }
@@ -255,11 +255,13 @@ class _HomePageState extends State<HomePage> {
       builder: (dialogContext) {
         var selectedCountdown = defaultCountdown;
         var selectedLayoutKey = defaultLayoutKey;
+        var selectedPhotoCount = _photoCountForLayout(defaultLayoutKey);
         const layoutChoices = [
-          _LayoutChoice(key: 'grid', label: 'Grid 2x2', description: 'Rapi dan seimbang'),
-          _LayoutChoice(key: 'vertical', label: 'Vertical Strip', description: 'Memanjang ke bawah'),
-          _LayoutChoice(key: 'horizontal', label: 'Horizontal Strip', description: 'Memanjang ke samping'),
-          _LayoutChoice(key: 'polaroid', label: 'Polaroid', description: 'Frame putih klasik'),
+          _LayoutChoice(key: 'wanted1', label: 'Wanted 1x Take', description: '1 foto tunggal'),
+          _LayoutChoice(key: 'wanted2', label: 'Wanted 2x Take', description: '2 foto berpasangan'),
+          _LayoutChoice(key: 'wanted3', label: 'Wanted 3x Take', description: '3 foto paling seimbang'),
+          _LayoutChoice(key: 'wanted4', label: 'Wanted 4x Take', description: '4 foto gaya grid'),
+          _LayoutChoice(key: 'wanted6', label: 'Wanted 6x Take', description: '6 foto full session'),
         ];
 
         return StatefulBuilder(
@@ -273,7 +275,7 @@ class _HomePageState extends State<HomePage> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Jumlah foto dari paket: ${widget.photoCount}',
+                      'Jumlah foto mengikuti take: $selectedPhotoCount',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -294,7 +296,10 @@ class _HomePageState extends State<HomePage> {
                         .toList(),
                     onChanged: (value) {
                       if (value == null) return;
-                      setDialogState(() => selectedLayoutKey = value);
+                      setDialogState(() {
+                        selectedLayoutKey = value;
+                        selectedPhotoCount = _photoCountForLayout(value);
+                      });
                     },
                   ),
                   const SizedBox(height: 16),
@@ -329,6 +334,7 @@ class _HomePageState extends State<HomePage> {
                       _CaptureSessionOptions(
                         countdownSeconds: selectedCountdown,
                         layoutKey: selectedLayoutKey,
+                        photoCount: selectedPhotoCount,
                       ),
                     );
                   },
@@ -627,10 +633,12 @@ class _CaptureSessionOptions {
   const _CaptureSessionOptions({
     required this.countdownSeconds,
     required this.layoutKey,
+    required this.photoCount,
   });
 
   final int countdownSeconds;
   final String layoutKey;
+  final int photoCount;
 }
 
 class _LayoutChoice {
@@ -643,6 +651,23 @@ class _LayoutChoice {
   final String key;
   final String label;
   final String description;
+}
+
+int _photoCountForLayout(String layoutKey) {
+  switch (layoutKey) {
+    case 'wanted1':
+      return 1;
+    case 'wanted2':
+      return 2;
+    case 'wanted3':
+      return 3;
+    case 'wanted4':
+      return 4;
+    case 'wanted6':
+      return 6;
+    default:
+      return 3;
+  }
 }
 
 enum _CapturePreviewAction {
