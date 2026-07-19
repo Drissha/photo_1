@@ -20,12 +20,12 @@ class HomePage extends StatefulWidget {
     super.key,
     required this.packageName,
     required this.photoCount,
-    required this.initialLayoutKey,
+    required this.initialBackgroundKey,
   });
 
   final String packageName;
   final int photoCount;
-  final String initialLayoutKey;
+  final String initialBackgroundKey;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -164,7 +164,7 @@ class _HomePageState extends State<HomePage> {
 
     final options = await _showCaptureOptionsDialog(
       defaultCountdown: settings.autoCaptureDelaySeconds,
-      defaultLayoutKey: widget.initialLayoutKey,
+      defaultBackgroundKey: widget.initialBackgroundKey,
     );
     if (options == null || !mounted) return;
 
@@ -228,7 +228,7 @@ class _HomePageState extends State<HomePage> {
               photoPaths: savedPaths,
               takeFolderPath: takeFolder,
               takeFolderName: Uri.file(takeFolder).pathSegments.last,
-              initialLayoutKey: options.layoutKey,
+              initialBackgroundKey: options.backgroundKey,
             ),
           ),
         );
@@ -248,20 +248,20 @@ class _HomePageState extends State<HomePage> {
 
   Future<_CaptureSessionOptions?> _showCaptureOptionsDialog({
     required int defaultCountdown,
-    required String defaultLayoutKey,
+    required String defaultBackgroundKey,
   }) {
     return showDialog<_CaptureSessionOptions>(
       context: context,
       builder: (dialogContext) {
         var selectedCountdown = defaultCountdown;
-        var selectedLayoutKey = defaultLayoutKey;
-        var selectedPhotoCount = _photoCountForLayout(defaultLayoutKey);
-        const layoutChoices = [
-          _LayoutChoice(key: 'wanted1', label: 'Wanted 1x Take', description: '1 foto tunggal'),
-          _LayoutChoice(key: 'wanted2', label: 'Wanted 2x Take', description: '2 foto berpasangan'),
-          _LayoutChoice(key: 'wanted3', label: 'Wanted 3x Take', description: '3 foto paling seimbang'),
-          _LayoutChoice(key: 'wanted4', label: 'Wanted 4x Take', description: '4 foto gaya grid'),
-          _LayoutChoice(key: 'wanted6', label: 'Wanted 6x Take', description: '6 foto full session'),
+        var selectedBackgroundKey = defaultBackgroundKey;
+        var selectedPhotoCount = _photoCountForBackground(defaultBackgroundKey);
+        const backgroundChoices = [
+          _LayoutChoice(key: 'portrait1', label: 'Portrait 1 Take', description: 'Template portrait, 1 foto'),
+          _LayoutChoice(key: 'portrait2', label: 'Portrait 2 Take', description: 'Template portrait, 2 foto'),
+          _LayoutChoice(key: 'portrait3', label: 'Portrait 3 Take', description: 'Template portrait, 3 foto'),
+          _LayoutChoice(key: 'landscape4', label: 'Landscape 4 Take', description: 'Template landscape, 4 foto'),
+          _LayoutChoice(key: 'landscape6', label: 'Landscape 6 Take', description: 'Template landscape, 6 foto'),
         ];
 
         return StatefulBuilder(
@@ -275,30 +275,30 @@ class _HomePageState extends State<HomePage> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Jumlah foto mengikuti take: $selectedPhotoCount',
+                      'Jumlah foto mengikuti template: $selectedPhotoCount',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedLayoutKey,
+                    value: selectedBackgroundKey,
                     decoration: const InputDecoration(
-                      labelText: 'Layout awal',
+                      labelText: 'Background awal',
                       border: OutlineInputBorder(),
                     ),
-                    items: layoutChoices
+                    items: backgroundChoices
                         .map(
-                          (layout) => DropdownMenuItem(
-                            value: layout.key,
-                            child: Text('${layout.label} - ${layout.description}'),
+                          (background) => DropdownMenuItem(
+                            value: background.key,
+                            child: Text('${background.label} - ${background.description}'),
                           ),
                         )
                         .toList(),
                     onChanged: (value) {
                       if (value == null) return;
                       setDialogState(() {
-                        selectedLayoutKey = value;
-                        selectedPhotoCount = _photoCountForLayout(value);
+                        selectedBackgroundKey = value;
+                        selectedPhotoCount = _photoCountForBackground(value);
                       });
                     },
                   ),
@@ -333,7 +333,7 @@ class _HomePageState extends State<HomePage> {
                       dialogContext,
                       _CaptureSessionOptions(
                         countdownSeconds: selectedCountdown,
-                        layoutKey: selectedLayoutKey,
+                        backgroundKey: selectedBackgroundKey,
                         photoCount: selectedPhotoCount,
                       ),
                     );
@@ -570,49 +570,72 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildCameraStage(CameraManagerService cameraManager) {
-    final controller = cameraManager.controller;
-    final isReady = controller != null && controller.value.isInitialized;
+  final controller = cameraManager.controller;
+  final isReady = controller != null && controller.value.isInitialized;
+  final isInitializing = cameraManager.isInitializing;
 
-    return ColoredBox(
-      color: Colors.black,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          if (isReady)
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final previewSize = controller.value.previewSize;
-                final width = previewSize?.width ?? constraints.maxWidth;
-                final height = previewSize?.height ?? constraints.maxHeight;
-                return ClipRect(
-                  child: Center(
-                    child: FittedBox(
-                      fit: BoxFit.cover,
-                      child: SizedBox(
-                        width: width,
-                        height: height,
-                        child: CameraPreview(controller),
-                      ),
+  return ColoredBox(
+    color: Colors.black,
+    child: Stack(
+      fit: StackFit.expand,
+      children: [
+        if (isReady)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final previewSize = controller.value.previewSize;
+              final width = previewSize?.width ?? constraints.maxWidth;
+              final height = previewSize?.height ?? constraints.maxHeight;
+
+              return ClipRect(
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: width,
+                      height: height,
+                      child: CameraPreview(controller),
                     ),
                   ),
-                );
-              },
-            )
-          else
-            const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('Waiting for camera...', style: TextStyle(color: Colors.white)),
-                ],
-              ),
+                ),
+              );
+            },
+          )
+        else if (isInitializing)
+          const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 12),
+                Text(
+                  'Waiting for camera...',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
             ),
-        ],
-      ),
-    );
-  }
+          )
+        else
+          const Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.videocam_off_outlined,
+                  color: Colors.white54,
+                  size: 42,
+                ),
+                SizedBox(height: 12),
+                Text(
+                  'Camera not ready',
+                  style: TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
+}
 
   Widget _buildInfoChip(String label, String value) {
     return Material(
@@ -632,12 +655,12 @@ class _HomePageState extends State<HomePage> {
 class _CaptureSessionOptions {
   const _CaptureSessionOptions({
     required this.countdownSeconds,
-    required this.layoutKey,
+    required this.backgroundKey,
     required this.photoCount,
   });
 
   final int countdownSeconds;
-  final String layoutKey;
+  final String backgroundKey;
   final int photoCount;
 }
 
@@ -653,17 +676,17 @@ class _LayoutChoice {
   final String description;
 }
 
-int _photoCountForLayout(String layoutKey) {
-  switch (layoutKey) {
-    case 'wanted1':
+int _photoCountForBackground(String backgroundKey) {
+  switch (backgroundKey) {
+    case 'portrait1':
       return 1;
-    case 'wanted2':
+    case 'portrait2':
       return 2;
-    case 'wanted3':
+    case 'portrait3':
       return 3;
-    case 'wanted4':
+    case 'landscape4':
       return 4;
-    case 'wanted6':
+    case 'landscape6':
       return 6;
     default:
       return 3;

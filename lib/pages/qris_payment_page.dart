@@ -11,7 +11,7 @@ class QrisPaymentPage extends StatefulWidget {
     super.key,
     required this.packageName,
     required this.photoCount,
-    required this.initialLayoutKey,
+    required this.initialBackgroundKey,
     required this.basePrice,
     required this.discountAmount,
     required this.finalPrice,
@@ -20,7 +20,7 @@ class QrisPaymentPage extends StatefulWidget {
 
   final String packageName;
   final int photoCount;
-  final String initialLayoutKey;
+  final String initialBackgroundKey;
   final int basePrice;
   final int discountAmount;
   final int finalPrice;
@@ -98,7 +98,7 @@ class _QrisPaymentPageState extends State<QrisPaymentPage> {
         builder: (_) => HomePage(
           packageName: widget.packageName,
           photoCount: widget.photoCount,
-          initialLayoutKey: widget.initialLayoutKey,
+          initialBackgroundKey: widget.initialBackgroundKey,
         ),
       ),
     );

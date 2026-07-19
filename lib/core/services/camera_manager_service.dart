@@ -18,6 +18,7 @@ class CameraManagerService extends ChangeNotifier {
   List<CameraDevice> _availableDevices = const [];
   CameraDevice? _selectedDevice;
   bool _isInitialized = false;
+  bool _isInitializing = false;
   bool _isCapturing = false;
   bool _isDisconnected = false;
   double _fps = 0;
@@ -25,11 +26,13 @@ class CameraManagerService extends ChangeNotifier {
   String _resolution = 'Unknown';
   String? _lastError;
   Timer? _heartbeatTimer;
+  int _initializationToken = 0;
 
   CameraController? get controller => _controller;
   List<CameraDevice> get availableDevices => _availableDevices;
   CameraDevice? get selectedDevice => _selectedDevice;
   bool get isInitialized => _isInitialized;
+  bool get isInitializing => _isInitializing;
   bool get isCapturing => _isCapturing;
   bool get isDisconnected => _isDisconnected;
   double get fps => _fps;
@@ -68,43 +71,62 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<void> initializeCamera({String? cameraName}) async {
-    if (_controller != null) {
-      await _controller!.dispose();
+    final token = ++_initializationToken;
+    _isInitializing = true;
+    notifyListeners();
+
+    Future<void> disposeCurrentController() async {
+      final controller = _controller;
       _controller = null;
-    }
-
-    await refreshDevices();
-    final device = _availableDevices.firstWhere(
-      (item) => cameraName == null || item.name == cameraName,
-      orElse: () => _availableDevices.firstOrNull ?? const CameraDevice(id: 'fallback', name: 'Fallback', lensDirection: 'unknown'),
-    );
-
-    if (_availableDevices.isEmpty) {
-      _isDisconnected = true;
-      _status = 'No camera detected';
-      _lastError = 'CAM001';
-      notifyListeners();
-      return;
+      if (controller != null) {
+        await controller.dispose();
+      }
     }
 
     try {
+      await disposeCurrentController();
+
+      await refreshDevices();
+      if (token != _initializationToken) return;
+      final device = _availableDevices.firstWhere(
+        (item) => cameraName == null || item.name == cameraName,
+        orElse: () => _availableDevices.firstOrNull ?? const CameraDevice(id: 'fallback', name: 'Fallback', lensDirection: 'unknown'),
+      );
+
+      if (_availableDevices.isEmpty) {
+        _isDisconnected = true;
+        _status = 'No camera detected';
+        _lastError = 'CAM001';
+        notifyListeners();
+        return;
+      }
+
       _selectedDevice = device;
       final cameras = await availableCameras();
+      if (token != _initializationToken) return;
       final selected = cameras.firstWhere(
         (camera) => camera.name == device.name,
         orElse: () => cameras.first,
       );
-      _controller = CameraController(
+      final controller = CameraController(
         selected,
         ResolutionPreset.max,
         enableAudio: false,
       );
-      await _controller!.initialize();
+      _controller = controller;
+      await controller.initialize();
+      if (token != _initializationToken) {
+        await controller.dispose();
+        if (_controller == controller) {
+          _controller = null;
+        }
+        return;
+      }
       _isInitialized = true;
       _isDisconnected = false;
       _status = 'Live preview active';
-      final width = _controller!.value.previewSize?.width ?? 0;
-      final height = _controller!.value.previewSize?.height ?? 0;
+      final width = controller.value.previewSize?.width ?? 0;
+      final height = controller.value.previewSize?.height ?? 0;
       _resolution = '${width.toInt()}x${height.toInt()}';
       _fps = 30;
       _heartbeatTimer?.cancel();
@@ -118,6 +140,11 @@ class CameraManagerService extends ChangeNotifier {
       _status = 'Camera initialization failed';
       _lastError = error.toString();
       notifyListeners();
+    } finally {
+      if (token == _initializationToken) {
+        _isInitializing = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -135,10 +162,15 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<void> stopCamera() async {
+    _initializationToken++;
+    _isInitializing = false;
     _heartbeatTimer?.cancel();
-    await _controller?.dispose();
+    final controller = _controller;
     _controller = null;
     _isInitialized = false;
+    if (controller != null) {
+      await controller.dispose();
+    }
     _status = 'Camera stopped';
     notifyListeners();
   }
@@ -215,10 +247,15 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<void> dispose() async {
+    _initializationToken++;
+    _isInitializing = false;
     _heartbeatTimer?.cancel();
-    await _controller?.dispose();
+    final controller = _controller;
     _controller = null;
     _isInitialized = false;
+    if (controller != null) {
+      await controller.dispose();
+    }
     notifyListeners();
   }
 }

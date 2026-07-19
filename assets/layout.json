@@ -1,0 +1,242 @@
+{
+  "templates": [
+    {
+      "key": "portraitPoster",
+      "page": {
+        "width": 1200,
+        "height": 1800
+      },
+      "frame": {
+        "margin": 34,
+        "headerHeight": 290,
+        "footerHeight": 230
+      },
+      "variants": {
+        "1": {
+          "slots": [
+            {
+              "x": 168,
+              "y": 400,
+              "width": 864,
+              "height": 760,
+              "caption": "CAUGHT ON TAPE"
+            }
+          ]
+        },
+        "2": {
+          "slots": [
+            {
+              "x": 96,
+              "y": 400,
+              "width": 1008,
+              "height": 380,
+              "caption": "CAUGHT ON TAPE"
+            },
+            {
+              "x": 96,
+              "y": 860,
+              "width": 1008,
+              "height": 380,
+              "caption": "LAST KNOWN APPEARANCE"
+            }
+          ]
+        },
+        "3": {
+          "slots": [
+            {
+              "x": 96,
+              "y": 380,
+              "width": 1008,
+              "height": 250,
+              "caption": "CAUGHT ON TAPE"
+            },
+            {
+              "x": 96,
+              "y": 690,
+              "width": 1008,
+              "height": 250,
+              "caption": "LAST KNOWN APPEARANCE"
+            },
+            {
+              "x": 96,
+              "y": 1000,
+              "width": 1008,
+              "height": 250,
+              "caption": "IDENTIFY THIS SUSPECT"
+            }
+          ]
+        },
+        "4": {
+          "slots": [
+            {
+              "x": 96,
+              "y": 390,
+              "width": 460,
+              "height": 320,
+              "caption": "CAUGHT ON TAPE"
+            },
+            {
+              "x": 576,
+              "y": 390,
+              "width": 460,
+              "height": 320,
+              "caption": "LAST KNOWN APPEARANCE"
+            },
+            {
+              "x": 96,
+              "y": 790,
+              "width": 460,
+              "height": 320,
+              "caption": "IDENTIFY THIS SUSPECT"
+            },
+            {
+              "x": 576,
+              "y": 790,
+              "width": 460,
+              "height": 320,
+              "caption": "MOST WANTED MOMENT"
+            }
+          ]
+        },
+        "6": {
+          "slots": [
+            {
+              "x": 96,
+              "y": 370,
+              "width": 460,
+              "height": 250,
+              "caption": "CAUGHT ON TAPE"
+            },
+            {
+              "x": 576,
+              "y": 370,
+              "width": 460,
+              "height": 250,
+              "caption": "LAST KNOWN APPEARANCE"
+            },
+            {
+              "x": 96,
+              "y": 670,
+              "width": 460,
+              "height": 250,
+              "caption": "IDENTIFY THIS SUSPECT"
+            },
+            {
+              "x": 576,
+              "y": 670,
+              "width": 460,
+              "height": 250,
+              "caption": "MOST WANTED MOMENT"
+            },
+            {
+              "x": 96,
+              "y": 970,
+              "width": 460,
+              "height": 250,
+              "caption": "UNMARKED ALIAS"
+            },
+            {
+              "x": 576,
+              "y": 970,
+              "width": 460,
+              "height": 250,
+              "caption": "FINAL SIGHTING"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "key": "landscapePoster",
+      "page": {
+        "width": 1800,
+        "height": 1200
+      },
+      "frame": {
+        "margin": 30,
+        "headerHeight": 220,
+        "footerHeight": 220
+      },
+      "variants": {
+        "4": {
+          "slots": [
+            {
+              "x": 88,
+              "y": 200,
+              "width": 800,
+              "height": 378,
+              "caption": "CAUGHT ON TAPE"
+            },
+            {
+              "x": 912,
+              "y": 200,
+              "width": 800,
+              "height": 378,
+              "caption": "LAST KNOWN APPEARANCE"
+            },
+            {
+              "x": 88,
+              "y": 602,
+              "width": 800,
+              "height": 378,
+              "caption": "IDENTIFY THIS SUSPECT"
+            },
+            {
+              "x": 912,
+              "y": 602,
+              "width": 800,
+              "height": 378,
+              "caption": "MOST WANTED MOMENT"
+            }
+          ]
+        },
+        "6": {
+          "slots": [
+            {
+              "x": 88,
+              "y": 200,
+              "width": 525.33,
+              "height": 378,
+              "caption": "CAUGHT ON TAPE"
+            },
+            {
+              "x": 637.33,
+              "y": 200,
+              "width": 525.33,
+              "height": 378,
+              "caption": "LAST KNOWN APPEARANCE"
+            },
+            {
+              "x": 1186.67,
+              "y": 200,
+              "width": 525.33,
+              "height": 378,
+              "caption": "IDENTIFY THIS SUSPECT"
+            },
+            {
+              "x": 88,
+              "y": 602,
+              "width": 525.33,
+              "height": 378,
+              "caption": "MOST WANTED MOMENT"
+            },
+            {
+              "x": 637.33,
+              "y": 602,
+              "width": 525.33,
+              "height": 378,
+              "caption": "UNMARKED ALIAS"
+            },
+            {
+              "x": 1186.67,
+              "y": 602,
+              "width": 525.33,
+              "height": 378,
+              "caption": "FINAL SIGHTING"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

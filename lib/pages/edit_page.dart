@@ -16,13 +16,13 @@ class EditPage extends StatefulWidget {
     required this.photoPaths,
     required this.takeFolderPath,
     required this.takeFolderName,
-    required this.initialLayoutKey,
+    required this.initialBackgroundKey,
   });
 
   final List<String> photoPaths;
   final String takeFolderPath;
   final String takeFolderName;
-  final String initialLayoutKey;
+  final String initialBackgroundKey;
 
   @override
   State<EditPage> createState() => _EditPageState();
@@ -56,7 +56,7 @@ class _EditPageState extends State<EditPage> {
   @override
   void initState() {
     super.initState();
-    _selectedLayout = _layoutFromKey(widget.initialLayoutKey);
+    _selectedLayout = _layoutFromKey(widget.initialBackgroundKey);
     _previewScrollController = ScrollController()
       ..addListener(() {
         if (mounted) {
@@ -347,6 +347,9 @@ try {
       case _EditLayout.wantedPoster:
         _paintWantedPosterLayout(canvas, spec, photos, tonePaint);
         break;
+      case _EditLayout.landscapePoster:
+        _paintLandscapePosterLayout(canvas, spec, photos, tonePaint);
+        break;
       case _EditLayout.grid:
         final cols = 2;
         final rows = math.max(1, (photos.length / cols).ceil());
@@ -487,49 +490,49 @@ try {
     );
 
     final titleX = spec.width * 0.5;
-    _drawText(
-      canvas,
-      'WANTED',
-      offset: Offset(titleX - 300, 80),
-      style: const TextStyle(
-        color: Color(0xFF131313),
-        fontSize: 96,
-        fontWeight: FontWeight.w900,
-        letterSpacing: 1.5,
-      ),
-      maxWidth: 600,
-    );
-    canvas.drawLine(
-      Offset(paperRect.left + 54, 182),
-      Offset(paperRect.right - 54, 182),
-      Paint()
-        ..color = const Color(0xFF111111).withOpacity(0.8)
-        ..strokeWidth = 2.5,
-    );
+    // _drawText(
+    //   canvas,
+    //   'WANTED',
+    //   offset: Offset(titleX - 300, 80),
+    //   style: const TextStyle(
+    //     color: Color(0xFF131313),
+    //     fontSize: 96,
+    //     fontWeight: FontWeight.w900,
+    //     letterSpacing: 1.5,
+    //   ),
+    //   maxWidth: 600,
+    // );
+    // canvas.drawLine(
+    //   Offset(paperRect.left + 54, 182),
+    //   Offset(paperRect.right - 54, 182),
+    //   Paint()
+    //     ..color = const Color(0xFF111111).withOpacity(0.8)
+    //     ..strokeWidth = 2.5,
+    // );
 
-    _drawText(
-      canvas,
-      'REWARD: FREE PHOTO BOOTH SESSION',
-      offset: Offset(paperRect.left + 72, 208),
-      style: const TextStyle(
-        color: Color(0xFF131313),
-        fontSize: 36,
-        fontWeight: FontWeight.w900,
-      ),
-      maxWidth: spec.width - 180,
-    );
-    _drawText(
-      canvas,
-      'FOR INFORMATION LEADING TO CAPTURE',
-      offset: Offset(paperRect.left + 86, 254),
-      style: const TextStyle(
-        color: Color(0xFF222222),
-        fontSize: 19,
-        fontWeight: FontWeight.w800,
-        letterSpacing: 0.8,
-      ),
-      maxWidth: spec.width - 180,
-    );
+    // _drawText(
+    //   canvas,
+    //   'REWARD: FREE PHOTO BOOTH SESSION',
+    //   offset: Offset(paperRect.left + 72, 208),
+    //   style: const TextStyle(
+    //     color: Color(0xFF131313),
+    //     fontSize: 36,
+    //     fontWeight: FontWeight.w900,
+    //   ),
+    //   maxWidth: spec.width - 180,
+    // );
+    // _drawText(
+    //   canvas,
+    //   'FOR INFORMATION LEADING TO CAPTURE',
+    //   offset: Offset(paperRect.left + 86, 254),
+    //   style: const TextStyle(
+    //     color: Color(0xFF222222),
+    //     fontSize: 19,
+    //     fontWeight: FontWeight.w800,
+    //     letterSpacing: 0.8,
+    //   ),
+    //   maxWidth: spec.width - 180,
+    // );
 
     final slotRects = _wantedPosterPhotoRects(spec);
     for (var index = 0; index < slotRects.length; index++) {
@@ -598,6 +601,144 @@ try {
     );
   }
 
+  void _paintLandscapePosterLayout(
+    Canvas canvas,
+    _LayoutExportSpec spec,
+    List<ui.Image> photos,
+    Paint tonePaint,
+  ) {
+    final outerRect = Rect.fromLTWH(0, 0, spec.width.toDouble(), spec.height.toDouble());
+    final paperRect = Rect.fromLTWH(
+      30,
+      30,
+      spec.width.toDouble() - 60,
+      spec.height.toDouble() - 60,
+    );
+
+    final basePaint = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFFF1E7D0),
+          Color(0xFFF8F1E3),
+          Color(0xFFDCC79F),
+        ],
+      ).createShader(outerRect);
+    canvas.drawRect(outerRect, basePaint);
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(paperRect, const Radius.circular(34)),
+      Paint()..color = const Color(0xFFF9F1E2).withOpacity(0.98),
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(paperRect, const Radius.circular(34)),
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 3
+        ..color = const Color(0xFF6F5A35).withOpacity(0.32),
+    );
+
+    _drawText(
+      canvas,
+      'WANTED',
+      offset: Offset(paperRect.left + 60, 56),
+      style: const TextStyle(
+        color: Color(0xFF111111),
+        fontSize: 92,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.2,
+      ),
+      maxWidth: spec.width - 120,
+    );
+    canvas.drawLine(
+      Offset(paperRect.left + 58, 150),
+      Offset(paperRect.right - 58, 150),
+      Paint()
+        ..color = const Color(0xFF111111).withOpacity(0.75)
+        ..strokeWidth = 2.5,
+    );
+
+    _drawText(
+      canvas,
+      'SELFIE SNAPSHOTS',
+      offset: Offset(paperRect.left + 60, 164),
+      style: const TextStyle(
+        color: Color(0xFF111111),
+        fontSize: 30,
+        fontWeight: FontWeight.w900,
+      ),
+      maxWidth: spec.width - 120,
+    );
+    _drawText(
+      canvas,
+      'FOR INFORMATION LEADING TO CAPTURE',
+      offset: Offset(paperRect.left + 60, 208),
+      style: const TextStyle(
+        color: Color(0xFF232323),
+        fontSize: 18,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.7,
+      ),
+      maxWidth: spec.width - 120,
+    );
+
+    final slotRects = _landscapePosterPhotoRects(spec);
+    for (var index = 0; index < slotRects.length; index++) {
+      final rect = slotRects[index];
+      final photo = photos.length > index ? photos[index] : null;
+      _paintWantedPosterFrame(
+        canvas,
+        rect,
+        photo,
+        tonePaint,
+        caption: 'PHOTO ${index + 1} - ${_landscapePosterCaptionForIndex(index)}',
+      );
+    }
+
+    _drawText(
+      canvas,
+      'SUSPECT: ${widget.takeFolderName.toUpperCase()}',
+      offset: Offset(paperRect.left + 58, paperRect.bottom - 166),
+      style: const TextStyle(
+        color: Color(0xFF111111),
+        fontSize: 26,
+        fontWeight: FontWeight.w900,
+      ),
+      maxWidth: spec.width - 140,
+    );
+    _drawText(
+      canvas,
+      'DEAD OR ALIVE | CAPTURED BY SELFIE ZONE PHOTOBOOTH',
+      offset: Offset(paperRect.left + 58, paperRect.bottom - 128),
+      style: const TextStyle(
+        color: Color(0xFF111111),
+        fontSize: 17,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.5,
+      ),
+      maxWidth: spec.width - 140,
+    );
+    canvas.drawLine(
+      Offset(paperRect.left + 58, paperRect.bottom - 96),
+      Offset(paperRect.right - 58, paperRect.bottom - 96),
+      Paint()
+        ..color = const Color(0xFF111111).withOpacity(0.45)
+        ..strokeWidth = 2,
+    );
+    _drawText(
+      canvas,
+      'CAPTURED LIVE IN THE BOOTH',
+      offset: Offset(paperRect.left + 58, paperRect.bottom - 74),
+      style: const TextStyle(
+        color: Color(0xFF111111),
+        fontSize: 16,
+        fontWeight: FontWeight.w900,
+      ),
+      maxWidth: spec.width - 140,
+    );
+  }
+
   List<Rect> _wantedPosterPhotoRects(_LayoutExportSpec spec) {
     final count = widget.photoPaths.length;
     final paperLeft = 96.0;
@@ -606,7 +747,7 @@ try {
     switch (count) {
       case 1:
         return [
-          Rect.fromLTWH(paperLeft + 72, 400, paperWidth - 144, 940),
+          Rect.fromLTWH(paperLeft + 72, 220, paperWidth - 200, 760),
         ];
       case 2:
         return [
@@ -639,6 +780,31 @@ try {
     }
   }
 
+  List<Rect> _landscapePosterPhotoRects(_LayoutExportSpec spec) {
+    final count = widget.photoPaths.length;
+    final paperLeft = 88.0;
+    final top = 200.0;
+    final paperWidth = spec.width.toDouble() - 176;
+    final gap = 24.0;
+
+    final cols = count <= 4 ? 2 : 3;
+    final rows = 2;
+    final cardWidth = (paperWidth - gap * (cols - 1)) / cols;
+    final availableHeight = spec.height.toDouble() - top - 220;
+    final cardHeight = (availableHeight - gap * (rows - 1)) / rows;
+
+    return List.generate(math.min(count, cols * rows), (index) {
+      final row = index ~/ cols;
+      final col = index % cols;
+      return Rect.fromLTWH(
+        paperLeft + col * (cardWidth + gap),
+        top + row * (cardHeight + gap),
+        cardWidth,
+        cardHeight,
+      );
+    });
+  }
+
   static const List<String> _wantedPosterCaptions = [
     'CAUGHT ON TAPE',
     'LAST KNOWN APPEARANCE',
@@ -650,6 +816,19 @@ try {
 
   String _wantedPosterCaptionForIndex(int index) {
     return _wantedPosterCaptions[index % _wantedPosterCaptions.length];
+  }
+
+  static const List<String> _landscapePosterCaptions = [
+    'CAUGHT ON TAPE',
+    'LAST KNOWN APPEARANCE',
+    'IDENTIFY THIS SUSPECT',
+    'MOST WANTED MOMENT',
+    'UNMARKED ALIAS',
+    'FINAL SIGHTING',
+  ];
+
+  String _landscapePosterCaptionForIndex(int index) {
+    return _landscapePosterCaptions[index % _landscapePosterCaptions.length];
   }
 
   void _paintWantedPosterFrame(
@@ -831,6 +1010,13 @@ try {
 
   _EditLayout _layoutFromKey(String key) {
     switch (key) {
+      case 'portrait1':
+      case 'portrait2':
+      case 'portrait3':
+        return _EditLayout.wantedPoster;
+      case 'landscape4':
+      case 'landscape6':
+        return _EditLayout.landscapePoster;
       case 'wanted1':
       case 'wanted2':
       case 'wanted3':
@@ -1560,6 +1746,8 @@ try {
     switch (_selectedLayout) {
       case _EditLayout.wantedPoster:
         return _buildWantedPosterPreview();
+      case _EditLayout.landscapePoster:
+        return _buildLandscapePosterPreview();
       case _EditLayout.grid:
         return GridView.builder(
           controller: _previewScrollController,
@@ -1690,35 +1878,35 @@ try {
                     right: 110,
                     child: Container(height: 2.5, color: const Color(0xFF111111).withOpacity(0.8)),
                   ),
-                  Positioned(
-                    top: 210,
-                    left: 116,
-                    right: 116,
-                    child: const Text(
-                      'REWARD: FREE PHOTO BOOTH SESSION',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF131313),
-                        fontSize: 34,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: 255,
-                    left: 112,
-                    right: 112,
-                    child: const Text(
-                      'FOR INFORMATION LEADING TO CAPTURE',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF222222),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
+                  // Positioned(
+                  //   top: 210,
+                  //   left: 116,
+                  //   right: 116,
+                  //   child: const Text(
+                  //     'REWARD: FREE PHOTO BOOTH SESSION',
+                  //     textAlign: TextAlign.center,
+                  //     style: TextStyle(
+                  //       color: Color(0xFF131313),
+                  //       fontSize: 34,
+                  //       fontWeight: FontWeight.w900,
+                  //     ),
+                  //   ),
+                  // ),
+                  // Positioned(
+                  //   top: 255,
+                  //   left: 112,
+                  //   right: 112,
+                  //   child: const Text(
+                  //     'FOR INFORMATION LEADING TO CAPTURE',
+                  //     textAlign: TextAlign.center,
+                  //     style: TextStyle(
+                  //       color: Color(0xFF222222),
+                  //       fontSize: 18,
+                  //       fontWeight: FontWeight.w800,
+                  //       letterSpacing: 0.8,
+                  //     ),
+                  //   ),
+                  // ),
                   _buildWantedPosterPreviewFrame(
                     top: 320,
                     caption: 'PHOTO 1 - CAUGHT ON TAPE',
@@ -1780,6 +1968,224 @@ try {
         );
       },
     );
+  }
+
+  Widget _buildLandscapePosterPreview() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final size = const Size(1800, 1200);
+        final scale = math.min(constraints.maxWidth / size.width, constraints.maxHeight / size.height);
+        return Center(
+          child: Transform.scale(
+            scale: scale.isFinite && scale > 0 ? scale : 1,
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: size.width,
+              height: size.height,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFFF1E7D0),
+                          Color(0xFFF8F1E3),
+                          Color(0xFFDCC79F),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(34),
+                    ),
+                  ),
+                  Container(
+                    margin: const EdgeInsets.all(30),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9F1E2),
+                      borderRadius: BorderRadius.circular(34),
+                      border: Border.all(color: const Color(0xFF6F5A35).withOpacity(0.32), width: 3),
+                    ),
+                  ),
+                  Positioned(
+                    top: 54,
+                    left: 64,
+                    child: const Text(
+                      'WANTED',
+                      style: TextStyle(
+                        color: Color(0xFF111111),
+                        fontSize: 88,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 150,
+                    left: 62,
+                    right: 62,
+                    child: Container(height: 2.5, color: const Color(0xFF111111).withOpacity(0.75)),
+                  ),
+                  Positioned(
+                    top: 160,
+                    left: 62,
+                    right: 62,
+                    child: const Text(
+                      'SELFIE SNAPSHOTS',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF111111),
+                        fontSize: 30,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 205,
+                    left: 62,
+                    right: 62,
+                    child: const Text(
+                      'FOR INFORMATION LEADING TO CAPTURE',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF232323),
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.7,
+                      ),
+                    ),
+                  ),
+                  ..._buildLandscapePreviewFrames(),
+                  Positioned(
+                    left: 62,
+                    right: 62,
+                    bottom: 152,
+                    child: Text(
+                      'SUSPECT: ${widget.takeFolderName.toUpperCase()}',
+                      style: const TextStyle(
+                        color: Color(0xFF111111),
+                        fontSize: 26,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 62,
+                    right: 62,
+                    bottom: 112,
+                    child: const Text(
+                      'DEAD OR ALIVE | CAPTURED BY SELFIE ZONE PHOTOBOOTH',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF111111),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    left: 62,
+                    right: 62,
+                    bottom: 76,
+                    child: Container(height: 2, color: const Color(0xFF111111).withOpacity(0.45)),
+                  ),
+                  Positioned(
+                    left: 62,
+                    right: 62,
+                    bottom: 50,
+                    child: const Text(
+                      'CAPTURED LIVE IN THE BOOTH',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF111111),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  List<Widget> _buildLandscapePreviewFrames() {
+    final rects = _landscapePosterPhotoRects(
+      const _LayoutExportSpec(
+        width: 1800,
+        height: 1200,
+        margin: 20,
+        headerHeight: 145,
+        footerHeight: 120,
+        innerPadding: 8,
+        gap: 24,
+      ),
+    );
+
+    return List.generate(rects.length, (index) {
+      final rect = rects[index];
+      return Positioned(
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height + 28,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              top: 28,
+              left: 0,
+              right: 0,
+              child: Container(
+                height: rect.height,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF111111),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.22),
+                      blurRadius: 10,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(14),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF5F0E4),
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: index < widget.photoPaths.length
+                      ? Image.file(
+                          File(widget.photoPaths[index]),
+                          fit: BoxFit.cover,
+                        )
+                      : Container(color: const Color(0xFF1C1C1C)),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              left: 6,
+              child: Text(
+                'PHOTO ${index + 1} - ${_landscapePosterCaptionForIndex(index)}',
+                style: const TextStyle(
+                  color: Color(0xFF111111),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildWantedPosterPreviewFrame({
@@ -2164,22 +2570,21 @@ class _LayoutExportSpec {
     required _EditLayout layout,
     required int photoCount,
   }) {
-    const fixedWidth = 1200;
-    const fixedHeight = 1800;
+    final isLandscapePoster = layout == _EditLayout.landscapePoster;
     final isStrip = layout == _EditLayout.verticalStrip || layout == _EditLayout.horizontalStrip;
     final isPolaroid = layout == _EditLayout.polaroid;
     final isWantedPoster = layout == _EditLayout.wantedPoster;
 
     return _LayoutExportSpec(
-      width: fixedWidth,
-      height: fixedHeight,
+      width: isLandscapePoster ? 2200 : 1300,
+      height: isLandscapePoster ? 1300 : 2200,
       margin: 20,
-      headerHeight: isStrip ? 90 : 90, // dinaikkan, beri jarak aman ~40px
+      headerHeight: isLandscapePoster ? 40 : 90,
       footerHeight: isWantedPoster
-          ? (photoCount <= 2 ? 120 : 100)
-          : (isPolaroid ? 100 : 90),
+          ? (photoCount <= 2 ? 110 : 100)
+          : (isLandscapePoster ? 110 : (isPolaroid ? 100 : 90)),
       innerPadding: isPolaroid ? 8 : 8,
-      gap: isStrip ? 20 : 18,
+      gap: isLandscapePoster ? 24 : (isStrip ? 20 : 18),
     );
   }
 }
@@ -2190,6 +2595,7 @@ enum _EditLayout {
   horizontalStrip,
   polaroid,
   wantedPoster,
+  landscapePoster,
 }
 
 extension on _EditLayout {
@@ -2199,6 +2605,7 @@ extension on _EditLayout {
         _EditLayout.horizontalStrip => 'Horizontal Strip',
         _EditLayout.polaroid => 'Polaroid',
         _EditLayout.wantedPoster => 'Wanted Poster',
+        _EditLayout.landscapePoster => 'Landscape Poster',
       };
 
   String get description => switch (this) {
@@ -2207,6 +2614,7 @@ extension on _EditLayout {
         _EditLayout.horizontalStrip => 'Susunan memanjang ke samping.',
         _EditLayout.polaroid => 'Frame putih ala cetak polaroid.',
         _EditLayout.wantedPoster => 'Poster vintage ala wanted board.',
+        _EditLayout.landscapePoster => 'Poster vintage lebar untuk 4 atau 6 foto.',
       };
 }
 

@@ -26,7 +26,18 @@ class CameraPreviewCard extends StatelessWidget {
                   color: Colors.black87,
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: cameraManager.controller != null && cameraManager.controller!.value.isInitialized
+                child: cameraManager.isInitializing
+                    ? const Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 12),
+                            Text('Initializing camera...', style: TextStyle(color: Colors.white)),
+                          ],
+                        ),
+                      )
+                    : cameraManager.controller != null && cameraManager.controller!.value.isInitialized
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(18),
                         child: CameraPreview(cameraManager.controller!),
