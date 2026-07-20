@@ -447,7 +447,7 @@ try {
     List<ui.Image> photos,
     Paint tonePaint,
   ) {
-    final outerRect = Rect.fromLTWH(0, 0, spec.width.toDouble(), spec.height.toDouble());
+    final outerRect = Rect.fromLTWH(0, 0,  spec.width.toDouble(), spec.height.toDouble());
     final paperRect = Rect.fromLTWH(
       34,
       34,
@@ -747,25 +747,25 @@ try {
     switch (count) {
       case 1:
         return [
-          Rect.fromLTWH(paperLeft + 72, 220, paperWidth - 200, 760),
+          Rect.fromLTWH(paperLeft + 72, 500, paperWidth - 200, 860),
         ];
       case 2:
         return [
-          Rect.fromLTWH(paperLeft, 400, paperWidth, 380),
-          Rect.fromLTWH(paperLeft, 860, paperWidth, 380),
+          Rect.fromLTWH(paperLeft, 500, paperWidth, 700),
+          Rect.fromLTWH(paperLeft, 1200, paperWidth, 700),
         ];
       case 3:
         return [
-          Rect.fromLTWH(paperLeft, 380, paperWidth, 250),
-          Rect.fromLTWH(paperLeft, 690, paperWidth, 250),
-          Rect.fromLTWH(paperLeft, 1000, paperWidth, 250),
+          Rect.fromLTWH(paperLeft, 510, paperWidth, 590),
+          Rect.fromLTWH(paperLeft, 1140, paperWidth, 590),
+          Rect.fromLTWH(paperLeft, 1770, paperWidth, 590),
         ];
       case 4:
         return [
-          Rect.fromLTWH(paperLeft, 390, 460, 320),
-          Rect.fromLTWH(paperLeft + 480, 390, 460, 320),
-          Rect.fromLTWH(paperLeft, 790, 460, 320),
-          Rect.fromLTWH(paperLeft + 480, 790, 460, 320),
+          Rect.fromLTWH(paperLeft, 250, 460, 520),
+          Rect.fromLTWH(paperLeft + 480, 250, 460, 520),
+          Rect.fromLTWH(paperLeft, 920, 460, 520),
+          Rect.fromLTWH(paperLeft + 480, 920, 460, 520),
         ];
       case 6:
       default:
@@ -783,14 +783,14 @@ try {
   List<Rect> _landscapePosterPhotoRects(_LayoutExportSpec spec) {
     final count = widget.photoPaths.length;
     final paperLeft = 88.0;
-    final top = 200.0;
+    final top = 150.0;
     final paperWidth = spec.width.toDouble() - 176;
-    final gap = 24.0;
+    final gap = 54.0;
 
     final cols = count <= 4 ? 2 : 3;
     final rows = 2;
     final cardWidth = (paperWidth - gap * (cols - 1)) / cols;
-    final availableHeight = spec.height.toDouble() - top - 220;
+    final availableHeight = spec.height.toDouble() - top - 200;
     final cardHeight = (availableHeight - gap * (rows - 1)) / rows;
 
     return List.generate(math.min(count, cols * rows), (index) {
@@ -800,7 +800,7 @@ try {
         paperLeft + col * (cardWidth + gap),
         top + row * (cardHeight + gap),
         cardWidth,
-        cardHeight,
+        850,
       );
     });
   }
@@ -2576,8 +2576,8 @@ class _LayoutExportSpec {
     final isWantedPoster = layout == _EditLayout.wantedPoster;
 
     return _LayoutExportSpec(
-      width: isLandscapePoster ? 2200 : 1300,
-      height: isLandscapePoster ? 1300 : 2200,
+      width: isLandscapePoster ? 3300 : 1500,
+      height: isLandscapePoster ? 2000 : 3300,
       margin: 20,
       headerHeight: isLandscapePoster ? 40 : 90,
       footerHeight: isWantedPoster
@@ -2588,6 +2588,8 @@ class _LayoutExportSpec {
     );
   }
 }
+
+
 
 enum _EditLayout {
   grid,
