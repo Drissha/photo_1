@@ -262,6 +262,7 @@ class _HomePageState extends State<HomePage> {
           _LayoutChoice(key: 'portrait3', label: 'Portrait 3 Take', description: 'Template portrait, 3 foto'),
           _LayoutChoice(key: 'landscape4', label: 'Landscape 4 Take', description: 'Template landscape, 4 foto'),
           _LayoutChoice(key: 'landscape6', label: 'Landscape 6 Take', description: 'Template landscape, 6 foto'),
+          _LayoutChoice(key: 'portrait6', label: 'Portrait 6 Take', description: 'Template portrait, 6 foto'),
         ];
 
         return StatefulBuilder(
@@ -687,6 +688,8 @@ int _photoCountForBackground(String backgroundKey) {
     case 'landscape4':
       return 4;
     case 'landscape6':
+      return 6;
+    case 'portrait6':
       return 6;
     default:
       return 3;

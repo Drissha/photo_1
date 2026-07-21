@@ -69,6 +69,15 @@ class _LandingPageState extends State<LandingPage> {
       photos: 6,
       accentColor: Color(0xFFFF8A5B),
     ),
+    _PackageOption(
+      id: 'portrait6',
+      title: 'Portrait 6 Take',
+      subtitle: 'Template portrait, 6 foto',
+      price: 90000,
+      durationMinutes: 20,
+      photos: 6,
+      accentColor: Color(0xFFFF8A5B),
+    ),
   ];
 
   late _PackageOption _selectedPackage;

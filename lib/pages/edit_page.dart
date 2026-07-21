@@ -747,7 +747,7 @@ try {
     switch (count) {
       case 1:
         return [
-          Rect.fromLTWH(paperLeft + 72, 500, paperWidth - 200, 860),
+          Rect.fromLTWH(paperLeft + 72, 500, paperWidth - 300, 1060),
         ];
       case 2:
         return [
@@ -770,12 +770,12 @@ try {
       case 6:
       default:
         return [
-          Rect.fromLTWH(paperLeft, 370, 460, 250),
-          Rect.fromLTWH(paperLeft + 480, 370, 460, 250),
-          Rect.fromLTWH(paperLeft, 670, 460, 250),
-          Rect.fromLTWH(paperLeft + 480, 670, 460, 250),
-          Rect.fromLTWH(paperLeft, 970, 460, 250),
-          Rect.fromLTWH(paperLeft + 480, 970, 460, 250),
+          Rect.fromLTWH(paperLeft - 90, 140, 770, 820),
+          Rect.fromLTWH(paperLeft + 750, 180, 770, 720),
+          Rect.fromLTWH(paperLeft - 90, 900, 770, 920),
+          Rect.fromLTWH(paperLeft + 750, 875, 770, 720),
+          Rect.fromLTWH(paperLeft - 90, 1700, 770, 790),
+          Rect.fromLTWH(paperLeft + 750, 1600, 770, 720),
         ];
     }
   }
@@ -1013,6 +1013,7 @@ try {
       case 'portrait1':
       case 'portrait2':
       case 'portrait3':
+      case 'portrait6':
         return _EditLayout.wantedPoster;
       case 'landscape4':
       case 'landscape6':
@@ -1244,7 +1245,7 @@ try {
                     color: Colors.black12,
                     image: DecorationImage(
                       image: FileImage(backgroundFile),
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                       colorFilter: ColorFilter.mode(
                         Colors.black.withOpacity(0.24),
                         BlendMode.darken,
@@ -2163,7 +2164,7 @@ try {
                   child: index < widget.photoPaths.length
                       ? Image.file(
                           File(widget.photoPaths[index]),
-                          fit: BoxFit.cover,
+                          fit: BoxFit.contain,
                         )
                       : Container(color: const Color(0xFF1C1C1C)),
                 ),
@@ -2233,7 +2234,7 @@ try {
                 child: index < widget.photoPaths.length
                     ? Image.file(
                         File(widget.photoPaths[index]),
-                        fit: BoxFit.cover,
+                        fit: BoxFit.contain,
                       )
                     : Container(
                         color: const Color(0xFF1C1C1C),
@@ -2576,8 +2577,8 @@ class _LayoutExportSpec {
     final isWantedPoster = layout == _EditLayout.wantedPoster;
 
     return _LayoutExportSpec(
-      width: isLandscapePoster ? 3300 : 1500,
-      height: isLandscapePoster ? 2000 : 3300,
+      width: isLandscapePoster ? 3600 : 2200,
+      height: isLandscapePoster ? 2400 : 3400,
       margin: 20,
       headerHeight: isLandscapePoster ? 40 : 90,
       footerHeight: isWantedPoster
