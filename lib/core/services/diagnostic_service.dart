@@ -20,10 +20,12 @@ class DiagnosticService {
     final saveDirectory = await storageService.ensureSaveDirectory(settings.saveFolderPath);
     final appDir = await getApplicationSupportDirectory();
     return {
-      'cameraDriver': 'camera_desktop',
-      'cameraApi': 'CameraController',
+      'cameraDriver': 'DigiCamControl',
+      'cameraApi': 'CameraControlRemoteCmd + Web LiveView',
       'currentResolution': cameraManager.resolution,
       'fps': cameraManager.fps,
+      'localLiveView': 'Enabled via webcam',
+      'localPreviewStatus': settings.liveViewEnabled ? 'Enabled' : 'Disabled',
       'availableCameras': cameraManager.availableDevices.map((camera) => camera.name).toList(),
       'currentSettings': settings.toString(),
       'captureTest': cameraManager.isInitialized ? 'Ready' : 'Not Ready',

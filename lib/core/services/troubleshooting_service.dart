@@ -35,7 +35,7 @@ class TroubleshootingService {
   }
 
   Future<AppError?> runDiagnostics() async {
-    if (cameraManager.controller == null || !cameraManager.controller!.value.isInitialized) {
+    if (!cameraManager.isInitialized) {
       return const AppError(
         code: 'CAM002',
         cause: 'Camera disconnected or not ready.',

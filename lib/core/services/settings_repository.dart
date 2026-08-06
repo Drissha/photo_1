@@ -27,6 +27,24 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
     }
 
     final decoded = jsonDecode(jsonString) as Map<String, dynamic>;
+    final commandPort = _readPort(
+      decoded,
+      keys: const [
+        'digicamControlCommandPort',
+        'digicamControlCommandBaseUrl',
+        'digicamControlBaseUrl',
+      ],
+      fallback: AppConstants.digicamControlCommandPort,
+    );
+    final liveViewPort = _readPort(
+      decoded,
+      keys: const [
+        'digicamControlLiveViewPort',
+        'digicamControlLiveViewBaseUrl',
+        'digicamControlBaseUrl',
+      ],
+      fallback: AppConstants.digicamControlLiveViewPort,
+    );
     return AppSettings(
       themeMode: ThemeMode.values.firstWhere(
         (value) => value.name == decoded['themeMode'],
@@ -34,7 +52,15 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
       ),
       language: decoded['language']?.toString() ?? 'English',
       saveFolderPath: decoded['saveFolderPath']?.toString() ?? 'C:/Users/Public/Pictures/Papyrus',
+      digicamControlCommandPort: commandPort,
+      digicamControlLiveViewPort: liveViewPort,
+      liveViewEnabled: decoded['liveViewEnabled'] as bool? ?? true,
+      digicamControlRemoteCmdPath: decoded['digicamControlRemoteCmdPath']?.toString() ??
+          AppConstants.digicamControlRemoteCmdPath,
       defaultCameraName: decoded['defaultCameraName']?.toString() ?? '',
+      liveViewCameraName: decoded['liveViewCameraName']?.toString() ??
+          decoded['defaultCameraName']?.toString() ??
+          '',
       autoStartCamera: decoded['autoStartCamera'] as bool? ?? true,
       autoCaptureDelaySeconds: decoded['autoCaptureDelaySeconds'] as int? ?? AppConstants.autoCaptureDelaySeconds,
       capturePreviewDurationSeconds:
@@ -66,7 +92,15 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
       'themeMode': settings.themeMode.name,
       'language': settings.language,
       'saveFolderPath': settings.saveFolderPath,
+      'digicamControlCommandPort': settings.digicamControlCommandPort,
+      'digicamControlLiveViewPort': settings.digicamControlLiveViewPort,
+      'liveViewEnabled': settings.liveViewEnabled,
+      'digicamControlCommandBaseUrl': settings.digicamControlCommandBaseUrl,
+      'digicamControlLiveViewBaseUrl': settings.digicamControlLiveViewBaseUrl,
+      'digicamControlBaseUrl': settings.digicamControlCommandBaseUrl,
+      'digicamControlRemoteCmdPath': settings.digicamControlRemoteCmdPath,
       'defaultCameraName': settings.defaultCameraName,
+      'liveViewCameraName': settings.liveViewCameraName,
       'autoStartCamera': settings.autoStartCamera,
       'autoCaptureDelaySeconds': settings.autoCaptureDelaySeconds,
       'capturePreviewDurationSeconds': settings.capturePreviewDurationSeconds,
@@ -89,5 +123,52 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
       'cameraFlipVertical': settings.cameraFlipVertical,
     });
     await prefs.setString(_storageKey, encoded);
+  }
+
+  int _readPort(
+    Map<String, dynamic> decoded, {
+    required List<String> keys,
+    required int fallback,
+  }) {
+    for (final key in keys) {
+      final value = decoded[key];
+      final parsed = _parsePort(value);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+    return fallback;
+  }
+
+  int? _parsePort(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+
+    if (value is num) {
+      return value.toInt();
+    }
+
+    final text = value.toString().trim();
+    if (text.isEmpty) {
+      return null;
+    }
+
+    final direct = int.tryParse(text);
+    if (direct != null) {
+      return direct;
+    }
+
+    final uri = Uri.tryParse(text);
+    if (uri != null && uri.hasPort) {
+      return uri.port;
+    }
+
+    final match = RegExp(r':(\d+)(?:/|$)').firstMatch(text);
+    if (match != null) {
+      return int.tryParse(match.group(1)!);
+    }
+
+    return null;
   }
 }

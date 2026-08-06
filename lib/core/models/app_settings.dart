@@ -7,7 +7,12 @@ class AppSettings {
     this.themeMode = ThemeMode.dark,
     this.language = 'English',
     this.saveFolderPath = 'C:/Users/Public/Pictures/Papyrus',
+    this.digicamControlCommandPort = AppConstants.digicamControlCommandPort,
+    this.digicamControlLiveViewPort = AppConstants.digicamControlLiveViewPort,
+    this.liveViewEnabled = true,
+    this.digicamControlRemoteCmdPath = AppConstants.digicamControlRemoteCmdPath,
     this.defaultCameraName = '',
+    this.liveViewCameraName = '',
     this.autoStartCamera = true,
     this.autoCaptureDelaySeconds = AppConstants.autoCaptureDelaySeconds,
     this.capturePreviewDurationSeconds = AppConstants.capturePreviewDurationSeconds,
@@ -33,7 +38,12 @@ class AppSettings {
   final ThemeMode themeMode;
   final String language;
   final String saveFolderPath;
+  final int digicamControlCommandPort;
+  final int digicamControlLiveViewPort;
+  final bool liveViewEnabled;
+  final String digicamControlRemoteCmdPath;
   final String defaultCameraName;
+  final String liveViewCameraName;
   final bool autoStartCamera;
   final int autoCaptureDelaySeconds;
   final int capturePreviewDurationSeconds;
@@ -56,11 +66,22 @@ class AppSettings {
   final bool cameraFlipHorizontal;
   final bool cameraFlipVertical;
 
+  String get digicamControlCommandBaseUrl =>
+      AppConstants.buildDigicamControlBaseUrl(digicamControlCommandPort);
+
+  String get digicamControlLiveViewBaseUrl =>
+      AppConstants.buildDigicamControlBaseUrl(digicamControlLiveViewPort);
+
   AppSettings copyWith({
     ThemeMode? themeMode,
     String? language,
     String? saveFolderPath,
+    int? digicamControlCommandPort,
+    int? digicamControlLiveViewPort,
+    bool? liveViewEnabled,
+    String? digicamControlRemoteCmdPath,
     String? defaultCameraName,
+    String? liveViewCameraName,
     bool? autoStartCamera,
     int? autoCaptureDelaySeconds,
     int? capturePreviewDurationSeconds,
@@ -86,7 +107,14 @@ class AppSettings {
       themeMode: themeMode ?? this.themeMode,
       language: language ?? this.language,
       saveFolderPath: saveFolderPath ?? this.saveFolderPath,
+      digicamControlCommandPort: digicamControlCommandPort ?? this.digicamControlCommandPort,
+      digicamControlLiveViewPort:
+          digicamControlLiveViewPort ?? this.digicamControlLiveViewPort,
+      liveViewEnabled: liveViewEnabled ?? this.liveViewEnabled,
+      digicamControlRemoteCmdPath:
+          digicamControlRemoteCmdPath ?? this.digicamControlRemoteCmdPath,
       defaultCameraName: defaultCameraName ?? this.defaultCameraName,
+      liveViewCameraName: liveViewCameraName ?? this.liveViewCameraName,
       autoStartCamera: autoStartCamera ?? this.autoStartCamera,
       autoCaptureDelaySeconds:
           autoCaptureDelaySeconds ?? this.autoCaptureDelaySeconds,

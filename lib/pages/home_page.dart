@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
@@ -14,6 +13,8 @@ import 'diagnostics_page.dart';
 import 'edit_page.dart';
 import 'gallery_page.dart';
 import 'settings_page.dart';
+import '../core/services/local_camera_preview_service.dart';
+import '../widgets/local_camera_live_view.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({
@@ -72,21 +73,33 @@ class _HomePageState extends State<HomePage> {
         _cameraSyncQueued = false;
 
         final cameraManager = context.read<CameraManagerService>();
+        final localPreview = context.read<LocalCameraPreviewService>();
         final troubleshooter = context.read<TroubleshootingService>();
         final settings = context.read<AppSettingsNotifier>().settings;
-        final preferredCameraName = settings.defaultCameraName.trim().isEmpty
+        cameraManager.updateConnectionSettings(settings);
+        await localPreview.setEnabled(settings.liveViewEnabled);
+        final preferredCaptureCameraName = settings.defaultCameraName.trim().isEmpty
             ? null
             : settings.defaultCameraName.trim();
+        final preferredLiveViewCameraName = settings.liveViewCameraName.trim().isEmpty
+            ? null
+            : settings.liveViewCameraName.trim();
 
-        if (_lastAppliedDefaultCameraName == preferredCameraName &&
-            cameraManager.selectedDevice?.name == preferredCameraName &&
-            cameraManager.isInitialized) {
-          continue;
+        final isSameCamera =
+            _lastAppliedDefaultCameraName == preferredCaptureCameraName &&
+            cameraManager.selectedDevice?.name == preferredCaptureCameraName &&
+            cameraManager.isInitialized;
+
+        if (!isSameCamera) {
+          _lastAppliedDefaultCameraName = preferredCaptureCameraName;
+          await cameraManager.initializeCamera(cameraName: preferredCaptureCameraName);
         }
 
-        _lastAppliedDefaultCameraName = preferredCameraName;
-
-        await cameraManager.initializeCamera(cameraName: preferredCameraName);
+        await cameraManager.applyCameraSettings(settings);
+        await localPreview.initializePreview(
+          preferredCameraName: preferredLiveViewCameraName,
+          forceRefresh: true,
+        );
         troubleshooter.startMonitoring();
         await _syncFullscreenState();
       } while (_cameraSyncQueued && mounted);
@@ -222,16 +235,18 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => EditPage(
-              photoPaths: savedPaths,
-              takeFolderPath: takeFolder,
-              takeFolderName: Uri.file(takeFolder).pathSegments.last,
-              initialBackgroundKey: options.backgroundKey,
-            ),
+        await Future<void>.delayed(Duration.zero);
+        if (!mounted) return;
+
+        final route = MaterialPageRoute(
+          builder: (_) => EditPage(
+            photoPaths: savedPaths,
+            takeFolderPath: takeFolder,
+            takeFolderName: Uri.file(takeFolder).pathSegments.last,
+            initialBackgroundKey: options.backgroundKey,
           ),
         );
+        await Navigator.of(context, rootNavigator: true).push(route);
       }
     } catch (error) {
       if (mounted) {
@@ -282,7 +297,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedBackgroundKey,
+                    initialValue: selectedBackgroundKey,
                     decoration: const InputDecoration(
                       labelText: 'Background awal',
                       border: OutlineInputBorder(),
@@ -305,7 +320,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
-                    value: selectedCountdown,
+                    initialValue: selectedCountdown,
                     decoration: const InputDecoration(
                       labelText: 'Countdown',
                       border: OutlineInputBorder(),
@@ -452,7 +467,7 @@ class _HomePageState extends State<HomePage> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        _buildCameraStage(cameraManager),
+        _buildCameraStage(),
         Positioned(
           left: 16,
           bottom: 16,
@@ -474,7 +489,7 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildCameraStatusPill(CameraManagerService cameraManager) {
     return Material(
-      color: Colors.black.withOpacity(0.55),
+      color: Colors.black.withValues(alpha: 0.55),
       borderRadius: BorderRadius.circular(999),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -499,7 +514,7 @@ class _HomePageState extends State<HomePage> {
       child: Material(
         key: const ValueKey('control-panel'),
         elevation: 12,
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.96),
+        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
         borderRadius: BorderRadius.circular(24),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -510,10 +525,10 @@ class _HomePageState extends State<HomePage> {
               Text('Camera Controls', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
               DropdownButtonFormField<String>(
-                value: cameraManager.selectedDevice?.name,
+                initialValue: cameraManager.selectedDevice?.name,
                 isExpanded: true,
                 decoration: const InputDecoration(
-                  labelText: 'Pilih Camera',
+                  labelText: 'Capture Camera',
                   border: OutlineInputBorder(),
                 ),
                 items: cameraManager.availableDevices
@@ -570,77 +585,23 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildCameraStage(CameraManagerService cameraManager) {
-  final controller = cameraManager.controller;
-  final isReady = controller != null && controller.value.isInitialized;
-  final isInitializing = cameraManager.isInitializing;
+  Widget _buildCameraStage() {
+    final localPreview = context.watch<LocalCameraPreviewService>();
 
-  return ColoredBox(
-    color: Colors.black,
-    child: Stack(
-      fit: StackFit.expand,
-      children: [
-        if (isReady)
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final previewSize = controller.value.previewSize;
-              final width = previewSize?.width ?? constraints.maxWidth;
-              final height = previewSize?.height ?? constraints.maxHeight;
-
-              return ClipRect(
-                child: Center(
-                  child: FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: width,
-                      height: height,
-                      child: CameraPreview(controller),
-                    ),
-                  ),
-                ),
-              );
-            },
-          )
-        else if (isInitializing)
-          const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 12),
-                Text(
-                  'Waiting for camera...',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ],
-            ),
-          )
-        else
-          const Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.videocam_off_outlined,
-                  color: Colors.white54,
-                  size: 42,
-                ),
-                SizedBox(height: 12),
-                Text(
-                  'Camera not ready',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ],
-            ),
-          ),
-      ],
-    ),
-  );
-}
+    return ColoredBox(
+      color: Colors.black,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          LocalCameraLiveView(previewService: localPreview),
+        ],
+      ),
+    );
+  }
 
   Widget _buildInfoChip(String label, String value) {
     return Material(
-      color: Colors.black.withOpacity(0.45),
+      color: Colors.black.withValues(alpha: 0.45),
       borderRadius: BorderRadius.circular(999),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -797,9 +758,9 @@ class _CapturePreviewDialogState extends State<_CapturePreviewDialog> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
+                          color: Colors.white.withValues(alpha: 0.08),
                           borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: Colors.white.withOpacity(0.12)),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
                         ),
                         child: Text(
                           '$_remainingSeconds',
@@ -839,7 +800,7 @@ class _CapturePreviewDialogState extends State<_CapturePreviewDialog> {
                         child: OutlinedButton.icon(
                           style: OutlinedButton.styleFrom(
                             foregroundColor: Colors.white,
-                            side: BorderSide(color: Colors.white.withOpacity(0.32), width: 1.4),
+                            side: BorderSide(color: Colors.white.withValues(alpha: 0.32), width: 1.4),
                             padding: const EdgeInsets.symmetric(vertical: 18),
                             textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                           ),
@@ -917,7 +878,7 @@ class _CountdownDialogState extends State<_CountdownDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      backgroundColor: Colors.black.withOpacity(0.9),
+      backgroundColor: Colors.black.withValues(alpha: 0.9),
       title: Text(
         'Foto ${widget.currentShot} dari ${widget.totalShots}',
         textAlign: TextAlign.center,

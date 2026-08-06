@@ -48,10 +48,10 @@ class _CameraControlsCardState extends State<CameraControlsCard> {
             Text('Camera Controls', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: widget.cameraManager.selectedDevice?.name,
+              initialValue: widget.cameraManager.selectedDevice?.name,
               isExpanded: true,
               decoration: const InputDecoration(
-                labelText: 'Pilih Camera',
+                labelText: 'Capture Camera',
                 border: OutlineInputBorder(),
               ),
               items: widget.cameraManager.availableDevices

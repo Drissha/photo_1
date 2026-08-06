@@ -36,8 +36,8 @@ class _EditPageState extends State<EditPage> {
   bool _backgroundInFront = true;
   String? _exportedFilePath;
   ui.Image? _previewImage;
-  Future<ui.Image?>? _previewImageFuture;
   int _previewRenderToken = 0;
+  Timer? _previewRefreshTimer;
   _EditLayout _selectedLayout = _EditLayout.grid;
   _ColorTone _selectedTone = _ColorTone.natural;
   final Map<BackgroundCategory, List<File>> _backgroundImagesByCategory = {
@@ -50,29 +50,32 @@ class _EditPageState extends State<EditPage> {
   late final ScrollController _previewScrollController;
   final List<Offset> _photoOffsets = [];
   final List<double> _photoScales = [];
-  double _scaleGestureInitial = 1.0;
   static const Color _backgroundAccentColor = Color(0xFFFFC857);
 
   @override
   void initState() {
     super.initState();
     _selectedLayout = _layoutFromKey(widget.initialBackgroundKey);
-    _previewScrollController = ScrollController()
-      ..addListener(() {
-        if (mounted) {
-          setState(() {});
-        }
-      });
+    _syncPhotoTransforms(widget.photoPaths.length);
+    _previewScrollController = ScrollController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncFullscreenState();
       _loadBackgroundImages();
-      _refreshExportPreview();
+      _scheduleExportPreviewRefresh();
     });
   }
 
   @override
+  void didUpdateWidget(covariant EditPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.photoPaths.length != widget.photoPaths.length) {
+      _syncPhotoTransforms(widget.photoPaths.length);
+    }
+  }
+
+  @override
   void dispose() {
-    _previewImageFuture = null;
+    _previewRefreshTimer?.cancel();
     _previewScrollController.dispose();
     _disposePreviewImage();
     super.dispose();
@@ -127,16 +130,22 @@ class _EditPageState extends State<EditPage> {
 
     setState(() => _isExporting = true);
     try {
+      final spec = _LayoutExportSpec.forLayout(
+        layout: _selectedLayout,
+        photoCount: widget.photoPaths.length,
+      );
       final decodedPhotos = <ui.Image>[];
       try {
         for (final path in widget.photoPaths) {
-          decodedPhotos.add(await _decodeUiImage(path));
+          decodedPhotos.add(
+            await _decodeUiImage(
+              path,
+              targetWidth: spec.width,
+              targetHeight: spec.height,
+            ),
+          );
         }
 
-        final spec = _LayoutExportSpec.forLayout(
-          layout: _selectedLayout,
-          photoCount: decodedPhotos.length,
-        );
         final recorder = ui.PictureRecorder();
         final canvas = Canvas(
           recorder,
@@ -146,7 +155,11 @@ class _EditPageState extends State<EditPage> {
         ui.Image? backgroundImage;
 try {
   if (_selectedBackgroundFile != null) {
-    backgroundImage = await _decodeUiImage(_selectedBackgroundFile!.path);
+    backgroundImage = await _decodeUiImage(
+      _selectedBackgroundFile!.path,
+      targetWidth: spec.width,
+      targetHeight: spec.height,
+    );
   }
 
   // Kalau background HARUS di belakang -> jadi wallpaper dasar saja
@@ -197,9 +210,17 @@ try {
     }
   }
 
-  Future<ui.Image> _decodeUiImage(String path) async {
+  Future<ui.Image> _decodeUiImage(
+    String path, {
+    int? targetWidth,
+    int? targetHeight,
+  }) async {
     final bytes = await File(path).readAsBytes();
-    final codec = await ui.instantiateImageCodec(bytes);
+    final codec = await ui.instantiateImageCodec(
+      bytes,
+      targetWidth: targetWidth,
+      targetHeight: targetHeight,
+    );
     final frame = await codec.getNextFrame();
     return frame.image;
   }
@@ -226,7 +247,7 @@ try {
     final glowPaint = Paint()
       ..shader = RadialGradient(
         colors: [
-          _backgroundAccentColor.withOpacity(0.22),
+          _backgroundAccentColor.withValues(alpha: 0.22),
           Colors.transparent,
         ],
       ).createShader(Rect.fromCircle(
@@ -238,7 +259,7 @@ try {
     final glowPaint2 = Paint()
       ..shader = RadialGradient(
         colors: [
-          _backgroundAccentColor.withOpacity(0.16),
+          _backgroundAccentColor.withValues(alpha: 0.16),
           Colors.transparent,
         ],
       ).createShader(Rect.fromCircle(
@@ -253,7 +274,7 @@ try {
       (spec.width - spec.margin * 2).toDouble(),
       (spec.height - spec.margin * 2).toDouble(),
     );
-    final shadowPaint = Paint()..color = Colors.black.withOpacity(0.45);
+    final shadowPaint = Paint()..color = Colors.black.withValues(alpha: 0.45);
     canvas.drawRRect(
       RRect.fromRectAndRadius(paperRect.shift(const Offset(0, 12)), const Radius.circular(38)),
       shadowPaint,
@@ -323,7 +344,7 @@ try {
       Rect.fromLTWH(offset.dx, offset.dy, width, 34),
       const Radius.circular(999),
     );
-    canvas.drawRRect(rect, Paint()..color = const Color(0xFF111827).withOpacity(0.92));
+    canvas.drawRRect(rect, Paint()..color = const Color(0xFF111827).withValues(alpha: 0.92));
     _drawText(
       canvas,
       label,
@@ -437,7 +458,7 @@ try {
   void _paintExportForegroundOverlay(Canvas canvas, _LayoutExportSpec spec, ui.Image? overlayImage) {
     if (overlayImage == null) return;
     final outerRect = Rect.fromLTWH(0, 0, spec.width.toDouble(), spec.height.toDouble());
-    final paint = Paint()..colorFilter = ColorFilter.mode(Colors.black.withOpacity(0.22), BlendMode.darken);
+    final paint = Paint()..colorFilter = ColorFilter.mode(Colors.black.withValues(alpha: 0.22), BlendMode.darken);
     _drawImageCover(canvas, overlayImage, outerRect, paint);
   }
 
@@ -471,7 +492,7 @@ try {
       ..shader = RadialGradient(
         colors: [
           Colors.transparent,
-          const Color(0xFF6B4E2D).withOpacity(0.22),
+          const Color(0xFF6B4E2D).withValues(alpha: 0.22),
         ],
         stops: const [0.65, 1.0],
       ).createShader(outerRect);
@@ -479,14 +500,14 @@ try {
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(paperRect, const Radius.circular(28)),
-      Paint()..color = const Color(0xFFF7F0E0).withOpacity(0.96),
+      Paint()..color = const Color(0xFFF7F0E0).withValues(alpha: 0.96),
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(paperRect, const Radius.circular(28)),
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3
-        ..color = const Color(0xFF3B2B17).withOpacity(0.5),
+        ..color = const Color(0xFF3B2B17).withValues(alpha: 0.5),
     );
 
     final titleX = spec.width * 0.5;
@@ -585,7 +606,7 @@ try {
       Offset(paperRect.left + 64, paperRect.bottom - 96),
       Offset(paperRect.right - 64, paperRect.bottom - 96),
       Paint()
-        ..color = const Color(0xFF111111).withOpacity(0.45)
+        ..color = const Color(0xFF111111).withValues(alpha: 0.45)
         ..strokeWidth = 2,
     );
     _drawText(
@@ -629,14 +650,14 @@ try {
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(paperRect, const Radius.circular(34)),
-      Paint()..color = const Color(0xFFF9F1E2).withOpacity(0.98),
+      Paint()..color = const Color(0xFFF9F1E2).withValues(alpha: 0.98),
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(paperRect, const Radius.circular(34)),
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3
-        ..color = const Color(0xFF6F5A35).withOpacity(0.32),
+        ..color = const Color(0xFF6F5A35).withValues(alpha: 0.32),
     );
 
     _drawText(
@@ -655,7 +676,7 @@ try {
       Offset(paperRect.left + 58, 150),
       Offset(paperRect.right - 58, 150),
       Paint()
-        ..color = const Color(0xFF111111).withOpacity(0.75)
+        ..color = const Color(0xFF111111).withValues(alpha: 0.75)
         ..strokeWidth = 2.5,
     );
 
@@ -723,7 +744,7 @@ try {
       Offset(paperRect.left + 58, paperRect.bottom - 96),
       Offset(paperRect.right - 58, paperRect.bottom - 96),
       Paint()
-        ..color = const Color(0xFF111111).withOpacity(0.45)
+        ..color = const Color(0xFF111111).withValues(alpha: 0.45)
         ..strokeWidth = 2,
     );
     _drawText(
@@ -796,12 +817,27 @@ try {
     return List.generate(math.min(count, cols * rows), (index) {
       final row = index ~/ cols;
       final col = index % cols;
+      if (count == 6) {
+      // return Rect.fromLTWH(
+      //   200 + col * (cardWidth + gap),
+      //   400 + row * (cardHeight - 100),
+      //   1800,
+      //   850,
+      // );
+      return Rect.fromLTWH(
+        paperLeft + col * (cardWidth + gap),
+        top + row * (cardHeight + gap),
+        cardWidth,
+        950,
+      );
+      } else {  
       return Rect.fromLTWH(
         paperLeft + col * (cardWidth + gap),
         top + row * (cardHeight + gap),
         cardWidth,
         850,
       );
+      }
     });
   }
 
@@ -847,7 +883,7 @@ try {
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect.shift(const Offset(0, 10)), const Radius.circular(8)),
-      Paint()..color = Colors.black.withOpacity(0.22),
+      Paint()..color = Colors.black.withValues(alpha: 0.22),
     );
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect, const Radius.circular(8)),
@@ -873,7 +909,7 @@ try {
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
-        ..color = const Color(0xFFFFFFFF).withOpacity(0.55),
+        ..color = const Color(0xFFFFFFFF).withValues(alpha: 0.55),
     );
 
     _drawText(
@@ -897,12 +933,12 @@ try {
   }) {
     final shadowOffset = polaroid ? const Offset(0, 14) : const Offset(0, 10);
     final frameRadius = polaroid ? 30.0 : 24.0;
-    final frameColor = polaroid ? Colors.white : const Color(0xFF0F1728).withOpacity(0.92);
-    final borderColor = polaroid ? const Color(0xFFE7DFD0) : Colors.white.withOpacity(0.12);
+    final frameColor = polaroid ? Colors.white : const Color(0xFF0F1728).withValues(alpha: 0.92);
+    final borderColor = polaroid ? const Color(0xFFE7DFD0) : Colors.white.withValues(alpha: 0.12);
     final padding = polaroid ? 18.0 : 12.0;
     final captionHeight = compact ? 38.0 : 52.0;
 
-    final shadowPaint = Paint()..color = Colors.black.withOpacity(0.18);
+    final shadowPaint = Paint()..color = Colors.black.withValues(alpha: 0.18);
     canvas.drawRRect(
       RRect.fromRectAndRadius(rect.shift(shadowOffset), Radius.circular(frameRadius)),
       shadowPaint,
@@ -992,6 +1028,17 @@ try {
     }
   }
 
+  void _syncPhotoTransforms(int count) {
+    while (_photoOffsets.length < count) {
+      _photoOffsets.add(Offset.zero);
+      _photoScales.add(1.0);
+    }
+    if (_photoOffsets.length > count) {
+      _photoOffsets.removeRange(count, _photoOffsets.length);
+      _photoScales.removeRange(count, _photoScales.length);
+    }
+  }
+
   void _drawText(
     Canvas canvas,
     String text, {
@@ -1053,7 +1100,7 @@ try {
             library.portraitImages.isNotEmpty ? BackgroundCategory.portrait : BackgroundCategory.landscape;
       }
     });
-    _refreshExportPreview();
+    _scheduleExportPreviewRefresh();
   }
 
   Future<void> _chooseBackground() async {
@@ -1111,14 +1158,14 @@ try {
                     const SizedBox(height: 16),
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
+                        color: Colors.white.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: Colors.white.withOpacity(0.08)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
                       ),
                       child: TabBar(
                         indicatorSize: TabBarIndicatorSize.tab,
                         indicator: BoxDecoration(
-                          color: const Color(0xFFFFC857).withOpacity(0.22),
+                          color: const Color(0xFFFFC857).withValues(alpha: 0.22),
                           borderRadius: BorderRadius.circular(16),
                         ),
                         labelColor: Colors.white,
@@ -1176,7 +1223,7 @@ try {
       _selectedBackgroundFile = nextBackground;
       _selectedBackgroundCategory = _backgroundCategoryForFile(nextBackground);
     });
-    _refreshExportPreview();
+    _scheduleExportPreviewRefresh();
   }
 
   Future<void> _chooseColorTone() async {
@@ -1206,7 +1253,7 @@ try {
 
     if (nextTone == null || !mounted) return;
     setState(() => _selectedTone = nextTone);
-    _refreshExportPreview();
+    _scheduleExportPreviewRefresh();
   }
 
   Widget _buildBackgroundChoiceCard(
@@ -1222,12 +1269,12 @@ try {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: isSelected ? Colors.white : Colors.white.withOpacity(0.12),
+            color: isSelected ? Colors.white : Colors.white.withValues(alpha: 0.12),
             width: isSelected ? 2.0 : 1.0,
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.18),
+              color: Colors.black.withValues(alpha: 0.18),
               blurRadius: 18,
               offset: const Offset(0, 10),
             ),
@@ -1244,10 +1291,14 @@ try {
                   decoration: BoxDecoration(
                     color: Colors.black12,
                     image: DecorationImage(
-                      image: FileImage(backgroundFile),
+                      image: ResizeImage(
+                        FileImage(backgroundFile),
+                        width: 480,
+                        height: 320,
+                      ),
                       fit: BoxFit.contain,
                       colorFilter: ColorFilter.mode(
-                        Colors.black.withOpacity(0.24),
+                        Colors.black.withValues(alpha: 0.24),
                         BlendMode.darken,
                       ),
                     ),
@@ -1257,7 +1308,7 @@ try {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.36),
+                        color: Colors.black.withValues(alpha: 0.36),
                         borderRadius: const BorderRadius.only(
                           bottomLeft: Radius.circular(18),
                           bottomRight: Radius.circular(18),
@@ -1468,8 +1519,8 @@ try {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(32),
-        color: Colors.white.withOpacity(0.06),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        color: Colors.white.withValues(alpha: 0.06),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1497,7 +1548,7 @@ try {
             child: ClipRRect(
               borderRadius: BorderRadius.circular(28),
               child: Container(
-                color: Colors.black.withOpacity(0.20),
+                color: Colors.black.withValues(alpha: 0.20),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 220),
                   child: _buildExportPreviewBody(),
@@ -1550,7 +1601,6 @@ try {
     final previewFuture = _renderExportPreviewImage();
     setState(() {
       _isPreviewRendering = true;
-      _previewImageFuture = previewFuture;
     });
 
     previewFuture.then((image) {
@@ -1562,15 +1612,21 @@ try {
       setState(() {
         _previewImage = image;
         _isPreviewRendering = false;
-        _previewImageFuture = null;
       });
       previous?.dispose();
     }).catchError((error, stackTrace) {
       if (!mounted || renderToken != _previewRenderToken) return;
       setState(() {
         _isPreviewRendering = false;
-        _previewImageFuture = null;
       });
+    });
+  }
+
+  void _scheduleExportPreviewRefresh() {
+    _previewRefreshTimer?.cancel();
+    _previewRefreshTimer = Timer(const Duration(milliseconds: 90), () {
+      if (!mounted) return;
+      _refreshExportPreview();
     });
   }
 
@@ -1580,20 +1636,30 @@ try {
   }
 
   Future<ui.Image> _renderExportPreviewImage() async {
-    final decodedPhotos = <ui.Image>[];
+    final spec = _LayoutExportSpec.forPreview(
+      layout: _selectedLayout,
+      photoCount: widget.photoPaths.length,
+    );
+    final decodedPhotos = <ui.Image>[]; 
     ui.Image? backgroundImage;
     try {
       for (final path in widget.photoPaths) {
-        decodedPhotos.add(await _decodeUiImage(path));
+        decodedPhotos.add(
+          await _decodeUiImage(
+            path,
+            targetWidth: spec.width,
+            targetHeight: spec.height,
+          ),
+        );
       }
       if (_selectedBackgroundFile != null) {
-        backgroundImage = await _decodeUiImage(_selectedBackgroundFile!.path);
+        backgroundImage = await _decodeUiImage(
+          _selectedBackgroundFile!.path,
+          targetWidth: spec.width,
+          targetHeight: spec.height,
+        );
       }
 
-      final spec = _LayoutExportSpec.forLayout(
-        layout: _selectedLayout,
-        photoCount: decodedPhotos.length,
-      );
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(
         recorder,
@@ -1733,16 +1799,6 @@ try {
     return rects;
   }
 
-  Offset _backgroundScrollOffset() {
-    if (!_previewScrollController.hasClients) {
-      return Offset.zero;
-    }
-    final offset = _previewScrollController.offset;
-    return _selectedLayout == _EditLayout.horizontalStrip
-        ? Offset(-offset, 0)
-        : Offset(0, -offset);
-  }
-
   Widget _buildLayoutPreview() {
     switch (_selectedLayout) {
       case _EditLayout.wantedPoster:
@@ -1772,7 +1828,7 @@ try {
           controller: _previewScrollController,
           key: const ValueKey('layout-vertical-strip'),
           itemCount: widget.photoPaths.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 16),
+          separatorBuilder: (_, _) => const SizedBox(height: 16),
           itemBuilder: (context, index) => SizedBox(
             height: 100,
             child: _buildPhotoFrame(
@@ -1789,7 +1845,7 @@ try {
           key: const ValueKey('layout-horizontal-strip'),
           scrollDirection: Axis.horizontal,
           itemCount: widget.photoPaths.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 16),
+          separatorBuilder: (_, _) => const SizedBox(width: 16),
           itemBuilder: (context, index) => SizedBox(
             width: 220,
             child: _buildPhotoFrame(
@@ -1855,7 +1911,7 @@ try {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF7F0E0),
                       borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: const Color(0xFF3B2B17).withOpacity(0.5), width: 3),
+                      border: Border.all(color: const Color(0xFF3B2B17).withValues(alpha: 0.5), width: 3),
                     ),
                   ),
                   Positioned(
@@ -1877,7 +1933,7 @@ try {
                     top: 182,
                     left: 110,
                     right: 110,
-                    child: Container(height: 2.5, color: const Color(0xFF111111).withOpacity(0.8)),
+                    child: Container(height: 2.5, color: const Color(0xFF111111).withValues(alpha: 0.8)),
                   ),
                   // Positioned(
                   //   top: 210,
@@ -1909,16 +1965,19 @@ try {
                   //   ),
                   // ),
                   _buildWantedPosterPreviewFrame(
+                    context: context,
                     top: 320,
                     caption: 'PHOTO 1 - CAUGHT ON TAPE',
                     index: 0,
                   ),
                   _buildWantedPosterPreviewFrame(
+                    context: context,
                     top: 564,
                     caption: 'PHOTO 2 - LAST KNOWN APPEARANCE',
                     index: 1,
                   ),
                   _buildWantedPosterPreviewFrame(
+                    context: context,
                     top: 808,
                     caption: 'PHOTO 3 - IDENTIFY THIS SUSPECT',
                     index: 2,
@@ -2005,7 +2064,7 @@ try {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF9F1E2),
                       borderRadius: BorderRadius.circular(34),
-                      border: Border.all(color: const Color(0xFF6F5A35).withOpacity(0.32), width: 3),
+                      border: Border.all(color: const Color(0xFF6F5A35).withValues(alpha: 0.32), width: 3),
                     ),
                   ),
                   Positioned(
@@ -2025,7 +2084,7 @@ try {
                     top: 150,
                     left: 62,
                     right: 62,
-                    child: Container(height: 2.5, color: const Color(0xFF111111).withOpacity(0.75)),
+                    child: Container(height: 2.5, color: const Color(0xFF111111).withValues(alpha: 0.75)),
                   ),
                   Positioned(
                     top: 160,
@@ -2089,7 +2148,7 @@ try {
                     left: 62,
                     right: 62,
                     bottom: 76,
-                    child: Container(height: 2, color: const Color(0xFF111111).withOpacity(0.45)),
+                    child: Container(height: 2, color: const Color(0xFF111111).withValues(alpha: 0.45)),
                   ),
                   Positioned(
                     left: 62,
@@ -2129,6 +2188,9 @@ try {
 
     return List.generate(rects.length, (index) {
       final rect = rects[index];
+      final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+      final cacheWidth = (rect.width * devicePixelRatio).round();
+      final cacheHeight = (rect.height * devicePixelRatio).round();
       return Positioned(
         left: rect.left,
         top: rect.top,
@@ -2148,7 +2210,7 @@ try {
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.22),
+                      color: Colors.black.withValues(alpha: 0.22),
                       blurRadius: 10,
                       offset: const Offset(0, 8),
                     ),
@@ -2165,6 +2227,9 @@ try {
                       ? Image.file(
                           File(widget.photoPaths[index]),
                           fit: BoxFit.contain,
+                          filterQuality: FilterQuality.low,
+                          cacheWidth: cacheWidth > 0 ? cacheWidth : null,
+                          cacheHeight: cacheHeight > 0 ? cacheHeight : null,
                         )
                       : Container(color: const Color(0xFF1C1C1C)),
                 ),
@@ -2190,6 +2255,7 @@ try {
   }
 
   Widget _buildWantedPosterPreviewFrame({
+    required BuildContext context,
     required double top,
     required String caption,
     required int index,
@@ -2198,6 +2264,9 @@ try {
     final rectLeft = 116.0;
     const rectWidth = 968.0;
     const rectHeight = 204.0;
+    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final cacheWidth = (rectWidth * devicePixelRatio).round();
+    final cacheHeight = (rectHeight * devicePixelRatio).round();
 
     return Positioned(
       left: rectLeft,
@@ -2218,7 +2287,7 @@ try {
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.22),
+                    color: Colors.black.withValues(alpha: 0.22),
                     blurRadius: 10,
                     offset: const Offset(0, 8),
                   ),
@@ -2235,6 +2304,9 @@ try {
                     ? Image.file(
                         File(widget.photoPaths[index]),
                         fit: BoxFit.contain,
+                        filterQuality: FilterQuality.low,
+                        cacheWidth: cacheWidth > 0 ? cacheWidth : null,
+                        cacheHeight: cacheHeight > 0 ? cacheHeight : null,
                       )
                     : Container(
                         color: const Color(0xFF1C1C1C),
@@ -2268,9 +2340,8 @@ try {
   }) {
     final isPolaroid = layout == _EditLayout.polaroid;
 
-    _ensurePhotoTransform(index);
-    final imageOffset = _photoOffsets[index];
-    final imageScale = _photoScales[index];
+    final imageOffset = index < _photoOffsets.length ? _photoOffsets[index] : Offset.zero;
+    final imageScale = index < _photoScales.length ? _photoScales[index] : 1.0;
 
     return Container(
       padding: EdgeInsets.zero,
@@ -2302,6 +2373,7 @@ try {
                 if (frameSize.width == 0 || frameSize.height == 0) return;
                 final dx = details.delta.dx / frameSize.width;
                 final dy = details.delta.dy / frameSize.height;
+                _ensurePhotoTransform(index);
                 setState(() {
                   _photoOffsets[index] = Offset(
                     (_photoOffsets[index].dx + dx).clamp(-1.5, 1.5),
@@ -2311,6 +2383,9 @@ try {
               },
               child: LayoutBuilder(
                 builder: (context, constraints) {
+                  final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+                  final cacheWidth = (constraints.maxWidth * devicePixelRatio).round();
+                  final cacheHeight = (constraints.maxHeight * devicePixelRatio).round();
                   final translateOffset = Offset(
                     imageOffset.dx * constraints.maxWidth,
                     imageOffset.dy * constraints.maxHeight,
@@ -2326,12 +2401,18 @@ try {
                             ? Image.file(
                                 File(path),
                                 fit: BoxFit.cover,
+                                filterQuality: FilterQuality.low,
+                                cacheWidth: cacheWidth > 0 ? cacheWidth : null,
+                                cacheHeight: cacheHeight > 0 ? cacheHeight : null,
                               )
                             : ColorFiltered(
                                 colorFilter: _selectedTone.filter!,
                                 child: Image.file(
                                   File(path),
                                   fit: BoxFit.cover,
+                                  filterQuality: FilterQuality.low,
+                                  cacheWidth: cacheWidth > 0 ? cacheWidth : null,
+                                  cacheHeight: cacheHeight > 0 ? cacheHeight : null,
                                 ),
                               ),
                       ),
@@ -2386,8 +2467,8 @@ try {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(32),
-        color: Colors.white.withOpacity(0.08),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
+        color: Colors.white.withValues(alpha: 0.08),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2445,9 +2526,9 @@ try {
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.20),
+              color: Colors.black.withValues(alpha: 0.20),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2486,9 +2567,9 @@ try {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.06),
+          color: Colors.white.withValues(alpha: 0.06),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
         child: Row(
           children: [
@@ -2527,9 +2608,9 @@ try {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         children: [
@@ -2586,6 +2667,32 @@ class _LayoutExportSpec {
           : (isLandscapePoster ? 110 : (isPolaroid ? 100 : 90)),
       innerPadding: isPolaroid ? 8 : 8,
       gap: isLandscapePoster ? 24 : (isStrip ? 20 : 18),
+    );
+  }
+
+  factory _LayoutExportSpec.forPreview({
+    required _EditLayout layout,
+    required int photoCount,
+  }) {
+    final exportSpec = _LayoutExportSpec.forLayout(
+      layout: layout,
+      photoCount: photoCount,
+    );
+    const maxPreviewSide = 1600;
+    final longestSide = math.max(exportSpec.width, exportSpec.height);
+    if (longestSide <= maxPreviewSide) {
+      return exportSpec;
+    }
+
+    final scale = maxPreviewSide / longestSide;
+    return _LayoutExportSpec(
+      width: math.max(1, (exportSpec.width * scale).round()),
+      height: math.max(1, (exportSpec.height * scale).round()),
+      margin: math.max(1, (exportSpec.margin * scale).round()),
+      headerHeight: exportSpec.headerHeight * scale,
+      footerHeight: exportSpec.footerHeight * scale,
+      innerPadding: exportSpec.innerPadding * scale,
+      gap: exportSpec.gap * scale,
     );
   }
 }
@@ -2685,8 +2792,8 @@ class _GlowOrb extends StatelessWidget {
         shape: BoxShape.circle,
         gradient: RadialGradient(
           colors: [
-            color.withOpacity(0.28),
-            color.withOpacity(0.08),
+            color.withValues(alpha: 0.28),
+            color.withValues(alpha: 0.08),
             Colors.transparent,
           ],
         ),

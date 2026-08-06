@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
@@ -5,7 +7,7 @@ import 'package:window_manager/window_manager.dart';
 import '../core/services/camera_manager_service.dart';
 import 'diagnostics_page.dart';
 import 'gallery_page.dart';
-import 'qris_payment_page.dart';
+import 'layout_selection_page.dart';
 import 'settings_page.dart';
 
 class LandingPage extends StatefulWidget {
@@ -16,73 +18,6 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
-  final TextEditingController _voucherController = TextEditingController();
-  final Map<String, double> _voucherDiscounts = const {
-    'PROMO10': 0.10,
-    'WELCOME20': 0.20,
-    'PAPYRUS25': 0.25,
-  };
-
-  final List<_PackageOption> _packages = const [
-    _PackageOption(
-      id: 'portrait1',
-      title: 'Portrait 1 Take',
-      subtitle: 'Template portrait, 1 foto',
-      price: 25000,
-      durationMinutes: 5,
-      photos: 1,
-      accentColor: Color(0xFFFFC857),
-    ),
-    _PackageOption(
-      id: 'portrait2',
-      title: 'Portrait 2 Take',
-      subtitle: 'Template portrait, 2 foto',
-      price: 40000,
-      durationMinutes: 7,
-      photos: 2,
-      accentColor: Color(0xFF7AE582),
-    ),
-    _PackageOption(
-      id: 'portrait3',
-      title: 'Portrait 3 Take',
-      subtitle: 'Template portrait, 3 foto',
-      price: 55000,
-      durationMinutes: 10,
-      photos: 3,
-      accentColor: Color(0xFF7BDFF2),
-    ),
-    _PackageOption(
-      id: 'landscape4',
-      title: 'Landscape 4 Take',
-      subtitle: 'Template landscape, 4 foto',
-      price: 70000,
-      durationMinutes: 14,
-      photos: 4,
-      accentColor: Color(0xFFF4B942),
-    ),
-    _PackageOption(
-      id: 'landscape6',
-      title: 'Landscape 6 Take',
-      subtitle: 'Template landscape, 6 foto',
-      price: 90000,
-      durationMinutes: 20,
-      photos: 6,
-      accentColor: Color(0xFFFF8A5B),
-    ),
-    _PackageOption(
-      id: 'portrait6',
-      title: 'Portrait 6 Take',
-      subtitle: 'Template portrait, 6 foto',
-      price: 90000,
-      durationMinutes: 20,
-      photos: 6,
-      accentColor: Color(0xFFFF8A5B),
-    ),
-  ];
-
-  late _PackageOption _selectedPackage;
-  String? _appliedVoucher;
-  double _voucherDiscount = 0;
   bool _isFullscreen = false;
   bool _showUtilityMenu = false;
 
@@ -92,35 +27,6 @@ class _LandingPageState extends State<LandingPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncFullscreenState();
       context.read<CameraManagerService>().refreshDevices();
-    });
-    _selectedPackage = _packages[2];
-  }
-
-  @override
-  void dispose() {
-    _voucherController.dispose();
-    super.dispose();
-  }
-
-  int get _basePrice => _selectedPackage.price;
-
-  int get _discountAmount => (_basePrice * _voucherDiscount).round();
-
-  int get _finalPrice => (_basePrice - _discountAmount).clamp(0, _basePrice);
-
-  void _applyVoucher() {
-    final code = _voucherController.text.trim().toUpperCase();
-    final discount = _voucherDiscounts[code];
-
-    setState(() {
-      _appliedVoucher = discount == null ? null : code;
-      _voucherDiscount = discount ?? 0;
-    });
-  }
-
-  void _selectPackage(_PackageOption package) {
-    setState(() {
-      _selectedPackage = package;
     });
   }
 
@@ -141,6 +47,10 @@ class _LandingPageState extends State<LandingPage> {
     await windowManager.close();
   }
 
+  void _toggleUtilityMenu() {
+    setState(() => _showUtilityMenu = !_showUtilityMenu);
+  }
+
   Future<void> _openUtilityPage(Widget page) async {
     if (!mounted) return;
     setState(() => _showUtilityMenu = false);
@@ -149,21 +59,13 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  void _toggleUtilityMenu() {
-    setState(() => _showUtilityMenu = !_showUtilityMenu);
-  }
-
-  Future<void> _goToQrisPayment() async {
+  Future<void> _startJourney() async {
     await Navigator.of(context).push(
       MaterialPageRoute(
-      builder: (_) => QrisPaymentPage(
-          packageName: _selectedPackage.title,
-          photoCount: _selectedPackage.photos,
-          initialBackgroundKey: _selectedPackage.id,
-          basePrice: _basePrice,
-          discountAmount: _discountAmount,
-          finalPrice: _finalPrice,
-          voucherCode: _appliedVoucher,
+        builder: (_) => const LayoutSelectionPage(
+          packageName: 'Portrait 3 Take',
+          photoCount: 3,
+          initialBackgroundKey: 'portrait3',
         ),
       ),
     );
@@ -172,159 +74,160 @@ class _LandingPageState extends State<LandingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0B1020),
-              Color(0xFF12192C),
-              Color(0xFF06080F),
-            ],
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF081120),
+                  Color(0xFF111B30),
+                  Color(0xFF05070C),
+                ],
+              ),
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 1100;
+          Positioned(
+            top: -120,
+            left: -80,
+            child: _GlowOrb(color: const Color(0xFFFFC857), size: 260),
+          ),
+          Positioned(
+            bottom: -100,
+            right: -70,
+            child: _GlowOrb(color: const Color(0xFF7BDFF2), size: 240),
+          ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: _FloatingIconField(
+                wide: MediaQuery.sizeOf(context).width >= 1100,
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 1100;
 
-              final hero = _buildHero(context);
-              final checkout = _buildCheckout(context);
+                  final content = isWide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            // Expanded(child: _buildHero(context)),
+                            // const SizedBox(width: 24),
+                            Expanded(child: _buildCta(context)),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            // Expanded(child: _buildHero(context)),
+                            const SizedBox(height: 24),
+                            Expanded(child: _buildCta(context)),
+                          ],
+                        );
 
-              return Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1440),
-                  child: Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: isWide
-                              ? Row(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    Expanded(flex: 11, child: hero),
-                                    const SizedBox(width: 24),
-                                    Expanded(flex: 10, child: checkout),
-                                  ],
-                                )
-                              : ListView(
-                                  children: [
-                                    hero,
-                                    const SizedBox(height: 24),
-                                    checkout,
-                                  ],
-                                ),
-                        ),
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: SafeArea(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                FloatingActionButton.extended(
-                                  onPressed: _toggleUtilityMenu,
-                                  icon: Icon(_showUtilityMenu ? Icons.close : Icons.menu),
-                                  label: Text(_showUtilityMenu ? 'Close Menu' : 'Menu'),
-                                ),
-                                AnimatedSize(
-                                  duration: const Duration(milliseconds: 220),
-                                  curve: Curves.easeInOut,
-                                  child: _showUtilityMenu
-                                      ? Padding(
-                                          padding: const EdgeInsets.only(top: 12),
-                                          child: Material(
-                                            key: const ValueKey('utility-panel'),
-                                            color: Theme.of(context).colorScheme.surface.withOpacity(0.96),
-                                            elevation: 14,
-                                            borderRadius: BorderRadius.circular(24),
-                                            child: ConstrainedBox(
-                                              constraints: const BoxConstraints(maxWidth: 240),
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(12),
-                                                child: Column(
-                                                  mainAxisSize: MainAxisSize.min,
-                                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                  children: [
-                                                    FilledButton.tonalIcon(
-                                                      onPressed: () => _openUtilityPage(const GalleryPage()),
-                                                      icon: const Icon(Icons.photo_library_outlined),
-                                                      label: const Text('Gallery'),
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    FilledButton.tonalIcon(
-                                                      onPressed: () => _openUtilityPage(const SettingsPage()),
-                                                      icon: const Icon(Icons.settings_outlined),
-                                                      label: const Text('Settings'),
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    FilledButton.tonalIcon(
-                                                      onPressed: () => _openUtilityPage(const DiagnosticsPage()),
-                                                      icon: const Icon(Icons.health_and_safety_outlined),
-                                                      label: const Text('Diagnostics'),
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    FilledButton.tonalIcon(
-                                                      onPressed: _toggleFullscreen,
-                                                      icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
-                                                      label: Text(_isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'),
-                                                    ),
-                                                    const SizedBox(height: 10),
-                                                    FilledButton.tonalIcon(
-                                                      onPressed: _exitApp,
-                                                      icon: const Icon(Icons.power_settings_new),
-                                                      label: const Text('Exit App'),
-                                                    ),
-                                                  ],
+                  return Stack(
+                    children: [
+                      Positioned.fill(child: content),
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            FloatingActionButton.small(
+                              onPressed: _toggleUtilityMenu,
+                              child: Icon(_showUtilityMenu ? Icons.close : Icons.menu),
+                            ),
+                            AnimatedSize(
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeInOut,
+                              child: _showUtilityMenu
+                                  ? Padding(
+                                      padding: const EdgeInsets.only(top: 12),
+                                      child: Material(
+                                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
+                                        elevation: 14,
+                                        borderRadius: BorderRadius.circular(24),
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(maxWidth: 240),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(12),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                                              children: [
+                                                FilledButton.tonalIcon(
+                                                  onPressed: () => _openUtilityPage(const GalleryPage()),
+                                                  icon: const Icon(Icons.photo_library_outlined),
+                                                  label: const Text('Gallery'),
                                                 ),
-                                              ),
+                                                const SizedBox(height: 10),
+                                                FilledButton.tonalIcon(
+                                                  onPressed: () => _openUtilityPage(const SettingsPage()),
+                                                  icon: const Icon(Icons.settings_outlined),
+                                                  label: const Text('Settings'),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                FilledButton.tonalIcon(
+                                                  onPressed: () => _openUtilityPage(const DiagnosticsPage()),
+                                                  icon: const Icon(Icons.health_and_safety_outlined),
+                                                  label: const Text('Diagnostics'),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                FilledButton.tonalIcon(
+                                                  onPressed: _toggleFullscreen,
+                                                  icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
+                                                  label: Text(_isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                FilledButton.tonalIcon(
+                                                  onPressed: _exitApp,
+                                                  icon: const Icon(Icons.power_settings_new),
+                                                  label: const Text('Exit App'),
+                                                ),
+                                              ],
                                             ),
                                           ),
-                                        )
-                                      : const SizedBox.shrink(),
-                                ),
-                              ],
+                                        ),
+                                      ),
+                                    )
+                                  : const SizedBox.shrink(),
                             ),
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            },
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildHero(BuildContext context) {
     return Container(
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF18233A),
-            Color(0xFF0F1728),
-            Color(0xFF0A0D16),
-          ],
-        ),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        borderRadius: BorderRadius.circular(36),
+        color: Colors.white.withValues(alpha: 0.05),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 30,
-            offset: const Offset(0, 18),
+            color: Colors.black.withValues(alpha: 0.34),
+            blurRadius: 32,
+            offset: const Offset(0, 20),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(28),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -335,31 +238,31 @@ class _LandingPageState extends State<LandingPage> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFC857).withOpacity(0.14),
+                  color: const Color(0xFFFFC857).withValues(alpha: 0.14),
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: const Color(0xFFFFC857).withOpacity(0.35)),
+                  border: Border.all(color: const Color(0xFFFFC857).withValues(alpha: 0.35)),
                 ),
                 child: const Text(
-                  'PAPYRUS PHOTBOOTH',
+                  'PAPYRUS PHOTOBOOTH',
                   style: TextStyle(
                     color: Color(0xFFFFD77A),
                     fontWeight: FontWeight.w800,
-                    letterSpacing: 1.4,
+                    letterSpacing: 1.2,
                   ),
                 ),
               ),
               const SizedBox(height: 22),
               Text(
-                'Pilih Wanted Take, lalu bayar QRIS sebelum masuk ke kamera.',
+                'Masuk ke sesi foto dengan satu tombol.',
                 style: Theme.of(context).textTheme.displaySmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w900,
-                      height: 1.05,
+                      height: 1.04,
                     ),
               ),
               const SizedBox(height: 16),
               Text(
-                'Halaman ini jadi gerbang awal. Pengunjung bisa input voucher, pilih take session, lalu scan QRIS untuk melanjutkan ke sesi foto.',
+                'Pilih layout dulu, lalu mulai sesi capture dalam tampilan yang bersih, cepat, dan langsung ke inti.',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: Colors.white70,
                       height: 1.5,
@@ -372,415 +275,696 @@ class _LandingPageState extends State<LandingPage> {
             spacing: 12,
             runSpacing: 12,
             children: const [
-              _StepChip(number: '01', label: 'Masukkan voucher'),
-              _StepChip(number: '02', label: 'Pilih take'),
-              _StepChip(number: '03', label: 'Bayar QRIS'),
-              _StepChip(number: '04', label: 'Masuk kamera'),
+              _StepChip(number: '01', label: 'Pilih layout'),
+              _StepChip(number: '02', label: 'Masuk kamera'),
+              _StepChip(number: '03', label: 'Ambil foto'),
             ],
           ),
-              const SizedBox(height: 28),
+          const SizedBox(height: 28),
+          const _HeroIllustration(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCta(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(36),
+        color: Colors.white.withValues(alpha: 0.06),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.34),
+            blurRadius: 32,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Container(
-            padding: const EdgeInsets.all(20),
+            width: 120,
+            height: 120,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              shape: BoxShape.rectangle,
+              borderRadius: BorderRadius.circular(32),
+              color: Colors.white.withValues(alpha: 0.08),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Wanted take terpilih',
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Colors.white60),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        _selectedPackage.title,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                            ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${_selectedPackage.durationMinutes} menit, ${_selectedPackage.photos} foto take',
-                        style: const TextStyle(color: Colors.white70),
-                      ),
-                    ],
-                  ),
+            child: Icon(  
+              Icons.photo_camera_rounded,
+              size: 72,
+              color: Colors.white.withValues(alpha: 0.88),
+            ),
+          ),
+          const SizedBox(height: 24),
+          // const Spacer(),
+          SizedBox(
+            height: 62,
+            width: 240,
+            child: FilledButton.icon(
+              onPressed: _startJourney,
+              icon: const Icon(Icons.play_arrow_rounded, size: 28),
+              label: const Text(
+                'Start',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              style: FilledButton.styleFrom(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(50),
                 ),
-                Container(
-                  width: 92,
-                  height: 92,
-                  decoration: BoxDecoration(
-                    color: _selectedPackage.accentColor.withOpacity(0.14),
-                    borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: _selectedPackage.accentColor.withOpacity(0.45)),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Rp${_selectedPackage.price ~/ 1000}K',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: _selectedPackage.accentColor,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+              ),
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildCheckout(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        color: Colors.white.withOpacity(0.06),
-        border: Border.all(color: Colors.white.withOpacity(0.10)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.35),
-            blurRadius: 30,
-            offset: const Offset(0, 18),
+class _HeroIllustration extends StatelessWidget {
+  const _HeroIllustration();
+
+  @override
+  Widget build(BuildContext context) {
+    return AspectRatio(
+      aspectRatio: 1.38,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(32),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFF1A2844),
+              Color(0xFF0C1324),
+              Color(0xFF090B12),
+            ],
           ),
-        ],
-      ),
-      padding: const EdgeInsets.all(24),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        ),
+        child: Stack(
           children: [
-            Text(
-              'Checkout',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                  ),
+            Positioned(
+              left: 18,
+              top: 18,
+              child: _GlintDot(color: const Color(0xFFFFC857), size: 18),
             ),
-            const SizedBox(height: 18),
-            _buildVoucherSection(context),
-            const SizedBox(height: 18),
-            Text(
-              'Pilih Wanted Take',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                  ),
+            Positioned(
+              right: 18,
+              bottom: 18,
+              child: _GlintDot(color: const Color(0xFF7BDFF2), size: 22),
             ),
-            const SizedBox(height: 12),
-            Text(
-              'Pilih jumlah take yang paling pas untuk layout Wanted.',
-              style: const TextStyle(color: Colors.white70, height: 1.4),
-            ),
-            const SizedBox(height: 10),
-            ..._packages.map(
-              (package) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _PackageCard(
-                  package: package,
-                  selected: package.id == _selectedPackage.id,
-                  onTap: () => _selectPackage(package),
+            Center(
+              child: Container(
+                width: 0.72 * 420,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      height: 240,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(24),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Color(0xFFFBF4E7),
+                            Color(0xFFF1E5CD),
+                          ],
+                        ),
+                      ),
+                      child: Stack(
+                        children: [
+                          Positioned(
+                            left: 18,
+                            top: 18,
+                            right: 18,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: const [
+                                _MiniStrip(height: 58, width: 58),
+                                _MiniStrip(height: 58, width: 58),
+                              ],
+                            ),
+                          ),
+                          Positioned(
+                            left: 18,
+                            right: 18,
+                            bottom: 18,
+                            child: Container(
+                              height: 122,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF0E1524),
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.22),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.photo_camera_outlined,
+                                  size: 64,
+                                  color: Color(0xFFFFD77A),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Container(
+                            height: 72,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFFC857), Color(0xFFFF8A5B)],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Container(
+                            height: 72,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              color: Colors.white.withValues(alpha: 0.08),
+                            ),
+                            child: const Center(
+                              child: Text(
+                                'CTA',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 1.4,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            _buildSummaryCard(context),
-            const SizedBox(height: 16),
-            FilledButton.icon(
-              onPressed: _goToQrisPayment,
-              icon: const Icon(Icons.qr_code_2_outlined),
-              label: const Text('Lanjut ke QRIS'),
             ),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildVoucherSection(BuildContext context) {
-    final hasVoucher = _appliedVoucher != null;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Voucher',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _voucherController,
-                  textCapitalization: TextCapitalization.characters,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Masukkan kode voucher',
-                    labelStyle: const TextStyle(color: Colors.white70),
-                    filled: true,
-                    fillColor: Colors.white.withOpacity(0.05),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(18),
-                      borderSide: BorderSide(color: Colors.white.withOpacity(0.12)),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              FilledButton(
-                onPressed: _applyVoucher,
-                child: const Text('Pakai'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (hasVoucher)
-            Text(
-              'Voucher $_appliedVoucher aktif. Diskon ${(_voucherDiscount * 100).round()}%.',
-              style: const TextStyle(color: Color(0xFF9AF0B0)),
-            )
-          else
-            const Text(
-              'Contoh voucher aktif: PROMO10, WELCOME20, PAPYRUS25',
-              style: TextStyle(color: Colors.white60),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFF0B1222),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Ringkasan Take',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-          const SizedBox(height: 14),
-          _SummaryRow(label: 'Take', value: _selectedPackage.title),
-          _SummaryRow(label: 'Harga', value: _formatCurrency(_basePrice)),
-          _SummaryRow(
-            label: 'Diskon voucher',
-            value: _discountAmount == 0 ? '-' : '- ${_formatCurrency(_discountAmount)}',
-          ),
-          const Divider(color: Colors.white24, height: 28),
-          _SummaryRow(
-            label: 'Total bayar',
-            value: _formatCurrency(_finalPrice),
-            valueStyle: const TextStyle(
-              color: Color(0xFFFFD77A),
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatCurrency(int value) {
-    final digits = value.toString().split('').reversed.toList();
-    final buffer = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      if (i != 0 && i % 3 == 0) {
-        buffer.write('.');
-      }
-      buffer.write(digits[i]);
-    }
-    return 'Rp ${buffer.toString().split('').reversed.join()}';
-  }
 }
 
-class _PackageOption {
-  const _PackageOption({
-    required this.id,
-    required this.title,
-    required this.subtitle,
-    required this.price,
-    required this.durationMinutes,
-    required this.photos,
-    required this.accentColor,
+class _FloatingIconField extends StatelessWidget {
+  const _FloatingIconField({
+    required this.wide,
   });
 
-  final String id;
-  final String title;
-  final String subtitle;
-  final int price;
-  final int durationMinutes;
-  final int photos;
-  final Color accentColor;
-}
-
-class _PackageCard extends StatelessWidget {
-  const _PackageCard({
-    required this.package,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final _PackageOption package;
-  final bool selected;
-  final VoidCallback onTap;
+  final bool wide;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: selected ? package.accentColor.withOpacity(0.14) : Colors.black.withOpacity(0.16),
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: selected ? package.accentColor : Colors.white.withOpacity(0.10),
-            width: selected ? 1.8 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                color: package.accentColor.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: Icon(
-                selected ? Icons.check_circle : Icons.photo_camera_outlined,
-                color: package.accentColor,
+    final icons = wide ? _FloatingIconSpec.wideSpecs : _FloatingIconSpec.compactSpecs;
+
+    return Stack(
+      children: [
+        for (final spec in icons)
+          Positioned(
+            left: spec.left,
+            top: spec.top,
+            right: spec.right,
+            bottom: spec.bottom,
+            child: Align(
+              alignment: spec.alignment,
+              child: _FloatingIconBubble(
+                icon: spec.icon,
+                size: spec.size,
+                tint: spec.tint,
+                amplitude: spec.amplitude,
+                duration: spec.duration,
+                delay: spec.delay,
+                rotation: spec.rotation,
               ),
             ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        package.title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
-                      const SizedBox(width: 8),
-                      if (selected)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: package.accentColor,
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: const Text(
-                            'Dipilih',
-                            style: TextStyle(
-                              color: Colors.black,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    package.subtitle,
-                    style: const TextStyle(color: Colors.white70),
+          ),
+      ],
+    );
+  }
+}
+
+class _FloatingIconBubble extends StatefulWidget {
+  const _FloatingIconBubble({
+    required this.icon,
+    required this.size,
+    required this.tint,
+    required this.amplitude,
+    required this.duration,
+    required this.delay,
+    required this.rotation,
+  });
+
+  final IconData icon;
+  final double size;
+  final Color tint;
+  final double amplitude;
+  final Duration duration;
+  final Duration delay;
+  final double rotation;
+
+  @override
+  State<_FloatingIconBubble> createState() => _FloatingIconBubbleState();
+}
+
+class _FloatingIconBubbleState extends State<_FloatingIconBubble> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: widget.duration,
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = Curves.easeInOut.transform(_controller.value);
+        final verticalShift = math.sin((t * math.pi * 2) + widget.delay.inMilliseconds / 1000.0) * widget.amplitude;
+        final glow = (0.18 + (0.08 * t)).clamp(0.0, 1.0);
+        return Transform.translate(
+          offset: Offset(0, verticalShift),
+          child: Transform.rotate(
+            angle: widget.rotation + (0.04 * math.sin(t * math.pi * 2)),
+            child: Container(
+              width: widget.size,
+              height: widget.size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    widget.tint.withValues(alpha: 0.24),
+                    widget.tint.withValues(alpha: 0.10),
+                    Colors.transparent,
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: widget.tint.withValues(alpha: 0.18),
+                    blurRadius: 26,
+                    spreadRadius: 6,
                   ),
                 ],
               ),
+              child: Center(
+                child: Container(
+                  width: widget.size * 0.62,
+                  height: widget.size * 0.62,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: glow),
+                    border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+                  ),
+                  child: Icon(
+                    widget.icon,
+                    size: widget.size * 0.34,
+                    color: const Color(0xFF0F1728).withValues(alpha: 0.88),
+                  ),
+                ),
+              ),
             ),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _FloatingIconSpec {
+  const _FloatingIconSpec({
+    required this.icon,
+    required this.size,
+    required this.tint,
+    required this.left,
+    required this.top,
+    required this.right,
+    required this.bottom,
+    required this.alignment,
+    required this.amplitude,
+    required this.duration,
+    required this.delay,
+    required this.rotation,
+  });
+
+  final IconData icon;
+  final double size;
+  final Color tint;
+  final double? left;
+  final double? top;
+  final double? right;
+  final double? bottom;
+  final Alignment alignment;
+  final double amplitude;
+  final Duration duration;
+  final Duration delay;
+  final double rotation;
+
+  static List<_FloatingIconSpec> get wideSpecs => const [
+        _FloatingIconSpec(
+          icon: Icons.camera_alt_rounded,
+          size: 74,
+          tint: Color(0xFFFFC857),
+          left: 54,
+          top: 118,
+          right: null,
+          bottom: null,
+          alignment: Alignment.topLeft,
+          amplitude: 12,
+          duration: Duration(milliseconds: 4200),
+          delay: Duration(milliseconds: 0),
+          rotation: -0.18,
+        ),
+        _FloatingIconSpec(
+          icon: Icons.auto_awesome_rounded,
+          size: 62,
+          tint: Color(0xFF7BDFF2),
+          left: 160,
+          top: 32,
+          right: null,
+          bottom: null,
+          alignment: Alignment.topLeft,
+          amplitude: 16,
+          duration: Duration(milliseconds: 5200),
+          delay: Duration(milliseconds: 700),
+          rotation: 0.22,
+        ),
+        _FloatingIconSpec(
+          icon: Icons.photo_library_rounded,
+          size: 68,
+          tint: Color(0xFFFF8A5B),
+          left: null,
+          top: 96,
+          right: 72,
+          bottom: null,
+          alignment: Alignment.topRight,
+          amplitude: 14,
+          duration: Duration(milliseconds: 4700),
+          delay: Duration(milliseconds: 300),
+          rotation: 0.12,
+        ),
+        _FloatingIconSpec(
+          icon: Icons.favorite_rounded,
+          size: 52,
+          tint: Color(0xFFFF6B9A),
+          left: null,
+          top: 208,
+          right: 200,
+          bottom: null,
+          alignment: Alignment.topRight,
+          amplitude: 10,
+          duration: Duration(milliseconds: 3900),
+          delay: Duration(milliseconds: 1400),
+          rotation: -0.12,
+        ),
+        _FloatingIconSpec(
+          icon: Icons.lens_rounded,
+          size: 88,
+          tint: Color(0xFF9B8CFF),
+          left: 84,
+          top: null,
+          right: null,
+          bottom: 84,
+          alignment: Alignment.bottomLeft,
+          amplitude: 18,
+          duration: Duration(milliseconds: 6100),
+          delay: Duration(milliseconds: 600),
+          rotation: 0.08,
+        ),
+        _FloatingIconSpec(
+          icon: Icons.image_rounded,
+          size: 58,
+          tint: Color(0xFF7BDFF2),
+          left: null,
+          top: null,
+          right: 84,
+          bottom: 110,
+          alignment: Alignment.bottomRight,
+          amplitude: 12,
+          duration: Duration(milliseconds: 4500),
+          delay: Duration(milliseconds: 1000),
+          rotation: -0.16,
+        ),
+        _FloatingIconSpec(
+          icon: Icons.star_rounded,
+          size: 44,
+          tint: Color(0xFFFFD77A),
+          left: 320,
+          top: 76,
+          right: null,
+          bottom: null,
+          alignment: Alignment.topLeft,
+          amplitude: 8,
+          duration: Duration(milliseconds: 3600),
+          delay: Duration(milliseconds: 1800),
+          rotation: 0.28,
+        ),
+      ];
+
+  static List<_FloatingIconSpec> get compactSpecs => const [
+        _FloatingIconSpec(
+          icon: Icons.camera_alt_rounded,
+          size: 60,
+          tint: Color(0xFFFFC857),
+          left: 16,
+          top: 88,
+          right: null,
+          bottom: null,
+          alignment: Alignment.topLeft,
+          amplitude: 10,
+          duration: Duration(milliseconds: 4300),
+          delay: Duration(milliseconds: 0),
+          rotation: -0.12,
+        ),
+        _FloatingIconSpec(
+          icon: Icons.auto_awesome_rounded,
+          size: 48,
+          tint: Color(0xFF7BDFF2),
+          left: null,
+          top: 140,
+          right: 18,
+          bottom: null,
+          alignment: Alignment.topRight,
+          amplitude: 12,
+          duration: Duration(milliseconds: 5000),
+          delay: Duration(milliseconds: 700),
+          rotation: 0.18,
+        ),
+        _FloatingIconSpec(
+          icon: Icons.photo_library_rounded,
+          size: 52,
+          tint: Color(0xFFFF8A5B),
+          left: 24,
+          top: null,
+          right: null,
+          bottom: 180,
+          alignment: Alignment.bottomLeft,
+          amplitude: 12,
+          duration: Duration(milliseconds: 4700),
+          delay: Duration(milliseconds: 300),
+          rotation: 0.08,
+        ),
+        _FloatingIconSpec(
+          icon: Icons.favorite_rounded,
+          size: 42,
+          tint: Color(0xFFFF6B9A),
+          left: null,
+          top: null,
+          right: 24,
+          bottom: 120,
+          alignment: Alignment.bottomRight,
+          amplitude: 8,
+          duration: Duration(milliseconds: 3900),
+          delay: Duration(milliseconds: 1300),
+          rotation: -0.12,
+        ),
+      ];
+}
+
+class _FeatureCard extends StatelessWidget {
+  const _FeatureCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.16),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFC857).withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(icon, color: const Color(0xFFFFD77A)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Rp ${package.price ~/ 1000}K',
+                  title,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${package.durationMinutes} menit',
-                  style: const TextStyle(color: Colors.white60),
+                  subtitle,
+                  style: const TextStyle(color: Colors.white70, height: 1.35),
                 ),
               ],
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStrip extends StatelessWidget {
+  const _MiniStrip({
+    required this.height,
+    required this.width,
+  });
+
+  final double height;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Container(
+        margin: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFFFC857),
+              Color(0xFF7BDFF2),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-class _SummaryRow extends StatelessWidget {
-  const _SummaryRow({
-    required this.label,
-    required this.value,
-    this.valueStyle,
+class _GlintDot extends StatelessWidget {
+  const _GlintDot({
+    required this.color,
+    required this.size,
   });
 
-  final String label;
-  final String value;
-  final TextStyle? valueStyle;
+  final Color color;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(color: Colors.white70),
-            ),
-          ),
-          Text(
-            value,
-            style: valueStyle ??
-                const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withValues(alpha: 0.9),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.28),
+            blurRadius: 24,
+            spreadRadius: 6,
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _GlowOrb extends StatelessWidget {
+  const _GlowOrb({
+    required this.color,
+    required this.size,
+  });
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            color.withValues(alpha: 0.28),
+            color.withValues(alpha: 0.08),
+            Colors.transparent,
+          ],
+        ),
       ),
     );
   }
@@ -800,9 +984,9 @@ class _StepChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.06),
+        color: Colors.white.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

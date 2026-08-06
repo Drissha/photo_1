@@ -1,12 +1,12 @@
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../core/services/camera_manager_service.dart';
+import '../core/services/local_camera_preview_service.dart';
+import 'local_camera_live_view.dart';
 
 class CameraPreviewCard extends StatelessWidget {
-  const CameraPreviewCard({super.key, required this.cameraManager});
+  const CameraPreviewCard({super.key, required this.previewService});
 
-  final CameraManagerService cameraManager;
+  final LocalCameraPreviewService previewService;
 
   @override
   Widget build(BuildContext context) {
@@ -26,21 +26,21 @@ class CameraPreviewCard extends StatelessWidget {
                   color: Colors.black87,
                   borderRadius: BorderRadius.circular(18),
                 ),
-                child: cameraManager.isInitializing
+                child: previewService.isInitializing
                     ? const Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             CircularProgressIndicator(),
                             SizedBox(height: 12),
-                            Text('Initializing camera...', style: TextStyle(color: Colors.white)),
+                            Text('Initializing local camera...', style: TextStyle(color: Colors.white)),
                           ],
                         ),
                       )
-                    : cameraManager.controller != null && cameraManager.controller!.value.isInitialized
-                    ? ClipRRect(
+                    : previewService.isInitialized
+                    ? LocalCameraLiveView(
+                        previewService: previewService,
                         borderRadius: BorderRadius.circular(18),
-                        child: CameraPreview(cameraManager.controller!),
                       )
                     : const Center(
                         child: Column(
@@ -48,7 +48,7 @@ class CameraPreviewCard extends StatelessWidget {
                           children: [
                             CircularProgressIndicator(),
                             SizedBox(height: 12),
-                            Text('Waiting for camera...', style: TextStyle(color: Colors.white)),
+                            Text('Waiting for local camera...', style: TextStyle(color: Colors.white)),
                           ],
                         ),
                       ),
@@ -59,8 +59,8 @@ class CameraPreviewCard extends StatelessWidget {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _statChip('Resolution', cameraManager.resolution),
-                _statChip('FPS', cameraManager.fps.toStringAsFixed(0)),
+                _statChip('Camera', previewService.selectedCameraName ?? 'Default'),
+                _statChip('Status', previewService.status),
                 _statChip('Brightness', 'Auto'),
                 _statChip('Contrast', 'Auto'),
                 _statChip('Saturation', 'Auto'),
