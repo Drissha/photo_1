@@ -1,6 +1,7 @@
 class AppConstants {
   AppConstants._();
 
+  // Nilai default ini dipakai lintas service agar konfigurasi tidak tercecer.
   static const String appName = 'Papyrus Photobooth';
   static const String defaultSaveFolderName = 'Papyrus';
   static const String defaultSaveFolderPath = 'C:/Users/Public/Pictures/Papyrus';
@@ -23,6 +24,7 @@ class AppConstants {
   static const int maxRecentPhotos = 24;
 
   static String buildDigicamControlBaseUrl(int port) {
+    // Helper kecil untuk menyusun base URL DigiCamControl dari port dinamis.
     return 'http://$digicamControlHost:$port';
   }
 }

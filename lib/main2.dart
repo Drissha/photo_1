@@ -7,9 +7,11 @@ import 'core/theme/app_theme.dart';
 import 'pages/landing_page.dart';
 
 Future<void> main() async {
+  // Entry point cadangan dengan bootstrap yang sama seperti `main.dart`.
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
+  // Window dibuat lebih dulu supaya state aplikasi tidak render dalam ukuran default.
   const windowOptions = WindowOptions(
     size: Size(1400, 900),
     minimumSize: Size(1200, 800),
@@ -30,6 +32,7 @@ class PapyrusPhotoboothApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Theme mengikuti setting tersimpan, jadi perubahan langsung terasa di seluruh app.
     return MultiProvider(
       providers: AppProviders.providers,
       child: Consumer<AppSettingsNotifier>(

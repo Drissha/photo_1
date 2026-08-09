@@ -4,6 +4,7 @@ import 'package:camera/camera.dart' as camera;
 import 'package:flutter/foundation.dart';
 
 class LocalCameraPreviewService extends ChangeNotifier {
+  // Menangani preview webcam lokal terpisah dari jalur capture DigiCamControl.
   List<camera.CameraDescription> _availableCameras = const [];
   camera.CameraController? _controller;
   bool _isInitializing = false;
@@ -26,6 +27,7 @@ class LocalCameraPreviewService extends ChangeNotifier {
   String? get selectedCameraName => _selectedCameraName;
 
   Future<void> setEnabled(bool enabled) async {
+    // Saat preview dimatikan, controller dibuang agar resource kamera tidak tertahan.
     if (_isEnabled == enabled) {
       return;
     }
@@ -42,6 +44,7 @@ class LocalCameraPreviewService extends ChangeNotifier {
   }
 
   Future<void> initializePreview({String? preferredCameraName, bool forceRefresh = false}) async {
+    // Token init dipakai untuk mencegah state lama menimpa hasil inisialisasi terbaru.
     if (!_isEnabled) {
       await _disposeController();
       _status = 'Local live view disabled';
@@ -140,6 +143,7 @@ class LocalCameraPreviewService extends ChangeNotifier {
   }
 
   camera.CameraDescription _selectCamera(List<camera.CameraDescription> cameras, String? preferredCameraName) {
+    // Prioritasnya: kamera yang dipilih user, lalu front camera, lalu kamera pertama yang tersedia.
     if (preferredCameraName != null && preferredCameraName.isNotEmpty) {
       for (final cameraDescription in cameras) {
         if (cameraDescription.name == preferredCameraName) {
@@ -167,6 +171,7 @@ class LocalCameraPreviewService extends ChangeNotifier {
   }
 
   Future<List<camera.CameraDescription>> _loadAvailableCamerasWithRetry() async {
+    // Retry ringan membantu saat permission kamera baru saja diberikan oleh OS.
     Object? lastError;
     for (var attempt = 0; attempt < 3; attempt++) {
       try {

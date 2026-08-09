@@ -4,12 +4,14 @@ import '../core/services/local_camera_preview_service.dart';
 import 'local_camera_live_view.dart';
 
 class CameraPreviewCard extends StatelessWidget {
+  // Card ringkas untuk menampilkan preview webcam beserta status pentingnya.
   const CameraPreviewCard({super.key, required this.previewService});
 
   final LocalCameraPreviewService previewService;
 
   @override
   Widget build(BuildContext context) {
+    // Card ini dipakai ulang di halaman settings atau dashboard untuk monitoring cepat.
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),

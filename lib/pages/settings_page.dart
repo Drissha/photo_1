@@ -8,6 +8,7 @@ import '../core/services/local_camera_preview_service.dart';
 import '../core/services/storage_service.dart';
 
 class SettingsPage extends StatefulWidget {
+  // Semua preferensi runtime dan koneksi kamera diatur dari halaman ini.
   const SettingsPage({super.key});
 
   @override
@@ -35,6 +36,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveSettings(AppSettings nextSettings, {bool applyCamera = false}) async {
+    // Setiap perubahan settings disimpan lalu didorong ke service yang relevan.
     final notifier = context.read<AppSettingsNotifier>();
     final cameraManager = context.read<CameraManagerService>();
     final localPreview = context.read<LocalCameraPreviewService>();
@@ -58,6 +60,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveConnectionSettings() async {
+    // Port control dan path remote cmd disimpan terpisah karena sering diubah bersama.
     final nextSettings = _sanitizeConnectionPorts(
       _settings.copyWith(
         digicamControlCommandPort:
@@ -85,6 +88,7 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   AppSettings _sanitizeConnectionPorts(AppSettings settings) {
+    // Dua port DigiCamControl tidak boleh sama agar command dan live view tidak bentrok.
     if (settings.digicamControlCommandPort != settings.digicamControlLiveViewPort) {
       return settings;
     }
@@ -108,6 +112,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Settings page membaca state langsung dari provider supaya selalu sinkron.
     final notifier = context.watch<AppSettingsNotifier>();
     final cameraManager = context.watch<CameraManagerService>();
     final localPreview = context.watch<LocalCameraPreviewService>();

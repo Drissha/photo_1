@@ -11,6 +11,7 @@ import 'storage_service.dart';
 import 'troubleshooting_service.dart';
 
 class AppProviders {
+  // Semua dependency utama dipasang di sini agar setiap page bisa membaca service yang sama.
   static List<SingleChildWidget> providers = [
     Provider<StorageService>(create: (_) => StorageService()),
     Provider<SettingsRepository>(create: (_) => SharedPreferencesSettingsRepository()),
@@ -39,6 +40,7 @@ class AppProviders {
 
 class AppSettingsNotifier extends ChangeNotifier {
   AppSettingsNotifier({required this.repository}) {
+    // Settings dibaca saat startup supaya UI langsung mengikuti preferensi terakhir.
     _initialize();
   }
 
@@ -53,6 +55,7 @@ class AppSettingsNotifier extends ChangeNotifier {
   }
 
   Future<void> updateSettings(AppSettings settings) async {
+    // Simpan dulu ke storage, lalu broadcast perubahan ke seluruh listener.
     _settings = settings;
     await repository.saveSettings(settings);
     notifyListeners();

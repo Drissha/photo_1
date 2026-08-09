@@ -8,11 +8,13 @@ import '../models/captured_photo.dart';
 import '../models/photo_take.dart';
 
 enum BackgroundCategory {
+  // Kategori ini dipakai untuk memisahkan background portrait dan landscape.
   portrait,
   landscape,
 }
 
 class BackgroundLibrary {
+  // Hasil scan folder background yang sudah dipisahkan per orientasi.
   const BackgroundLibrary({
     required this.portraitImages,
     required this.landscapeImages,
@@ -27,6 +29,7 @@ class BackgroundLibrary {
 }
 
 class StorageService {
+  // Semua operasi file/folder masuk ke service ini supaya page tidak berurusan langsung dengan I/O.
   Future<Directory> ensureSaveDirectory(String path) async {
     final directory = Directory(path);
     if (!directory.existsSync()) {
@@ -66,6 +69,7 @@ class StorageService {
   }
 
   Future<BackgroundLibrary> loadBackgroundLibrary(String folderPath) async {
+    // Scan rekursif dipakai agar folder portrait/landscape bisa tetap dikelola dari satu root.
     final folder = Directory(folderPath);
     if (!folder.existsSync()) {
       return BackgroundLibrary(
@@ -118,6 +122,7 @@ class StorageService {
   }
 
   Future<List<CapturedPhoto>> listPhotos(String folderPath) async {
+    // Gallery hanya mengambil file JPG karena itu format utama hasil capture.
     final folder = Directory(folderPath);
     if (!folder.existsSync()) {
       return const [];
@@ -143,6 +148,7 @@ class StorageService {
   }
 
   Future<List<PhotoTake>> listTakeFolders(String baseFolder) async {
+    // Folder sesi di-root scan sebagai kumpulan take, lalu foto lama di-root tetap dianggap legacy.
     final folder = Directory(baseFolder);
     if (!folder.existsSync()) {
       return const [];
@@ -197,6 +203,7 @@ class StorageService {
   }
 
   Future<BackgroundCategory> _classifyBackgroundFile(File file) async {
+    // Orientasi gambar ditentukan dari dimensi asli file agar layout otomatis lebih akurat.
     try {
       final bytes = await file.readAsBytes();
       final codec = await ui.instantiateImageCodec(bytes);

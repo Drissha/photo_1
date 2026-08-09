@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../core/services/local_camera_preview_service.dart';
 
 class LocalCameraLiveView extends StatelessWidget {
+  // Widget ini hanya merender state preview webcam lokal yang sudah dikelola service.
   const LocalCameraLiveView({
     super.key,
     required this.previewService,
@@ -15,6 +16,7 @@ class LocalCameraLiveView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // UI disederhanakan menjadi tiga keadaan utama: off, loading, atau live.
     Widget child;
     if (!previewService.isEnabled) {
       child = const Center(

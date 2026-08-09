@@ -1,4 +1,5 @@
 class CapturedPhoto {
+  // Metadata file hasil capture yang dipakai untuk gallery dan viewer.
   const CapturedPhoto({
     required this.path,
     required this.name,

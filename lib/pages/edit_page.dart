@@ -10,6 +10,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../core/services/storage_service.dart';
 
+// Halaman edit menggabungkan foto hasil capture, background, tone, dan export final.
 class EditPage extends StatefulWidget {
   const EditPage({
     super.key,
@@ -46,7 +47,6 @@ class _EditPageState extends State<EditPage> {
   };
   File? _selectedBackgroundFile;
   String? _backgroundFolderPath;
-  BackgroundCategory _selectedBackgroundCategory = BackgroundCategory.portrait;
   late final ScrollController _previewScrollController;
   final List<Offset> _photoOffsets = [];
   final List<double> _photoScales = [];
@@ -55,6 +55,7 @@ class _EditPageState extends State<EditPage> {
   @override
   void initState() {
     super.initState();
+    // Layout dan transform awal disiapkan sebelum background serta preview dimuat.
     _selectedLayout = _layoutFromKey(widget.initialBackgroundKey);
     _syncPhotoTransforms(widget.photoPaths.length);
     _previewScrollController = ScrollController();
@@ -113,6 +114,7 @@ class _EditPageState extends State<EditPage> {
   }
 
   Future<String> _exportEditedLayout() async {
+    // Export dilakukan sekali lalu di-cache supaya repeated action tidak menulis file baru.
     if (_exportedFilePath != null) {
       return _exportedFilePath!;
     }
@@ -226,6 +228,7 @@ try {
   }
 
   void _paintExportBackground(Canvas canvas, _LayoutExportSpec spec, ui.Image? backgroundImage) {
+    // Background export bisa berasal dari image pilihan atau gradient default.
     final outerRect = Rect.fromLTWH(0, 0, spec.width.toDouble(), spec.height.toDouble());
 
     if (backgroundImage != null) {
@@ -358,6 +361,7 @@ try {
   }
 
   void _paintExportPhotos(Canvas canvas, _LayoutExportSpec spec, List<ui.Image> photos) {
+    // Setiap layout punya aturan sendiri untuk penempatan foto pada hasil export.
     final top = spec.margin + spec.headerHeight;
     final left = spec.margin + spec.innerPadding;
     final contentWidth = spec.width - spec.margin * 2 - spec.innerPadding * 2;
@@ -762,43 +766,11 @@ try {
 
   List<Rect> _wantedPosterPhotoRects(_LayoutExportSpec spec) {
     final count = widget.photoPaths.length;
-    final paperLeft = 96.0;
-    final paperWidth = spec.width.toDouble() - 192;
-
-    switch (count) {
-      case 1:
-        return [
-          Rect.fromLTWH(paperLeft + 72, 500, paperWidth - 300, 1060),
-        ];
-      case 2:
-        return [
-          Rect.fromLTWH(paperLeft, 500, paperWidth, 700),
-          Rect.fromLTWH(paperLeft, 1200, paperWidth, 700),
-        ];
-      case 3:
-        return [
-          Rect.fromLTWH(paperLeft, 510, paperWidth, 590),
-          Rect.fromLTWH(paperLeft, 1140, paperWidth, 590),
-          Rect.fromLTWH(paperLeft, 1770, paperWidth, 590),
-        ];
-      case 4:
-        return [
-          Rect.fromLTWH(paperLeft, 250, 460, 520),
-          Rect.fromLTWH(paperLeft + 480, 250, 460, 520),
-          Rect.fromLTWH(paperLeft, 920, 460, 520),
-          Rect.fromLTWH(paperLeft + 480, 920, 460, 520),
-        ];
-      case 6:
-      default:
-        return [
-          Rect.fromLTWH(paperLeft - 90, 140, 770, 820),
-          Rect.fromLTWH(paperLeft + 750, 180, 770, 720),
-          Rect.fromLTWH(paperLeft - 90, 900, 770, 920),
-          Rect.fromLTWH(paperLeft + 750, 875, 770, 720),
-          Rect.fromLTWH(paperLeft - 90, 1700, 770, 790),
-          Rect.fromLTWH(paperLeft + 750, 1600, 770, 720),
-        ];
-    }
+    final builders = _wantedPosterSlotBuilders[count] ?? _wantedPosterSlotBuilders[6]!;
+    return builders
+        .take(count)
+        .map((buildRect) => buildRect(spec))
+        .toList(growable: false);
   }
 
   List<Rect> _landscapePosterPhotoRects(_LayoutExportSpec spec) {
@@ -835,7 +807,7 @@ try {
         paperLeft + col * (cardWidth + gap),
         top + row * (cardHeight + gap),
         cardWidth,
-        850,
+        950,
       );
       }
     });
@@ -853,6 +825,89 @@ try {
   String _wantedPosterCaptionForIndex(int index) {
     return _wantedPosterCaptions[index % _wantedPosterCaptions.length];
   }
+
+  static final Map<int, List<Rect Function(_LayoutExportSpec)>> _wantedPosterSlotBuilders = {
+    1: [
+      (spec) {
+        final paperLeft = 150;
+        final paperWidth = spec.width.toDouble() - 192;
+        return Rect.fromLTWH(paperLeft + 150, 500, paperWidth - 400, 1360);
+      },
+    ],
+    2: [
+      (spec) {
+        final paperLeft = 96.0;
+        final paperWidth = spec.width.toDouble() - 192;
+        return Rect.fromLTWH(paperLeft, 500, paperWidth, 700);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        final paperWidth = spec.width.toDouble() - 192;
+        return Rect.fromLTWH(paperLeft, 1200, paperWidth, 700);
+      },
+    ],
+    3: [
+      (spec) {
+        final paperLeft = 96.0;
+        final paperWidth = spec.width.toDouble() - 192;
+        return Rect.fromLTWH(paperLeft, 510, paperWidth, 590);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        final paperWidth = spec.width.toDouble() - 192;
+        return Rect.fromLTWH(paperLeft, 1140, paperWidth, 590);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        final paperWidth = spec.width.toDouble() - 192;
+        return Rect.fromLTWH(paperLeft, 1770, paperWidth, 590);
+      },
+    ],
+    4: [
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft, 250, 460, 520);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft + 480, 250, 460, 520);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft, 920, 460, 520);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft + 480, 920, 460, 520);
+      },
+    ],
+    6: [
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft - 90, 140, 970, 1320);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft + 750, 180, 970, 1320);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft - 90, 900, 970, 1320);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft + 750, 875, 970, 1320);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft - 90, 1700, 970, 1320);
+      },
+      (spec) {
+        final paperLeft = 96.0;
+        return Rect.fromLTWH(paperLeft + 750, 1600, 970, 1320);
+      },
+    ],
+  };
 
   static const List<String> _landscapePosterCaptions = [
     'CAUGHT ON TAPE',
@@ -1081,6 +1136,11 @@ try {
     final folderPath = await storageService.getDefaultBackgroundFolder();
     final library = await storageService.loadBackgroundLibrary(folderPath);
     if (!mounted) return;
+    final preferredCategory = _backgroundCategoryForLayout(_selectedLayout);
+    final preferredFiles =
+        preferredCategory == BackgroundCategory.portrait ? library.portraitImages : library.landscapeImages;
+    final fallbackFiles =
+        preferredCategory == BackgroundCategory.portrait ? library.landscapeImages : library.portraitImages;
     setState(() {
       _backgroundFolderPath = folderPath;
       _backgroundImagesByCategory[BackgroundCategory.portrait] = library.portraitImages;
@@ -1094,10 +1154,13 @@ try {
             ? library.portraitImages.first
             : (library.landscapeImages.isNotEmpty ? library.landscapeImages.first : null);
       }
-      if ((_backgroundImagesByCategory[_selectedBackgroundCategory]?.isEmpty ?? true) &&
-          (library.portraitImages.isNotEmpty || library.landscapeImages.isNotEmpty)) {
-        _selectedBackgroundCategory =
-            library.portraitImages.isNotEmpty ? BackgroundCategory.portrait : BackgroundCategory.landscape;
+      if (preferredFiles.isNotEmpty) {
+        _selectedBackgroundFile = _selectedBackgroundFile != null &&
+                preferredFiles.any((file) => file.path == _selectedBackgroundFile!.path)
+            ? _selectedBackgroundFile
+            : preferredFiles.first;
+      } else if (_selectedBackgroundFile == null && fallbackFiles.isNotEmpty) {
+        _selectedBackgroundFile = fallbackFiles.first;
       }
     });
     _scheduleExportPreviewRefresh();
@@ -1105,6 +1168,8 @@ try {
 
   Future<void> _chooseBackground() async {
     await _loadBackgroundImages();
+    final preferredCategory = _backgroundCategoryForLayout(_selectedLayout);
+    final files = _backgroundFilesFor(preferredCategory);
     final nextBackground = await showModalBottomSheet<File>(
       context: context,
       isScrollControlled: true,
@@ -1126,72 +1191,43 @@ try {
               constraints: BoxConstraints(
               maxHeight: MediaQuery.of(sheetContext).size.height * 0.75,
               ),
-              child: DefaultTabController(
-                length: BackgroundCategory.values.length,
-                initialIndex: _selectedBackgroundCategory.index,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pilih background',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Layout aktif ini memakai background ${_backgroundCategoryLabel(preferredCategory).toLowerCase()}.',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white70,
+                        ),
+                  ),
+                  const SizedBox(height: 6),
+                  if (_backgroundFolderPath != null)
                     Text(
-                      'Pilih background',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
+                      'Simpan file di: $_backgroundFolderPath/${_backgroundCategoryLabel(preferredCategory)}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Colors.white54,
                           ),
                     ),
-                    const SizedBox(height: 8),
-                    if (_backgroundFolderPath != null)
-                      Text(
-                        'Taruh gambar di folder ini: $_backgroundFolderPath/Portrait atau $_backgroundFolderPath/Landscape',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.white70,
+                  const SizedBox(height: 16),
+                  Expanded(
+                    child: files.isEmpty
+                        ? Center(
+                            child: Text(
+                              'Tidak ada background ${_backgroundCategoryLabel(preferredCategory).toLowerCase()}.',
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white70),
+                              textAlign: TextAlign.center,
                             ),
-                      )
-                    else
-                      Text(
-                        'Taruh gambar ke folder default untuk menggunakan background custom.',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.white70,
-                            ),
-                      ),
-                    const SizedBox(height: 16),
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-                      ),
-                      child: TabBar(
-                        indicatorSize: TabBarIndicatorSize.tab,
-                        indicator: BoxDecoration(
-                          color: const Color(0xFFFFC857).withValues(alpha: 0.22),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        labelColor: Colors.white,
-                        unselectedLabelColor: Colors.white54,
-                        tabs: [
-                          Tab(text: 'Portrait (${_backgroundFilesFor(BackgroundCategory.portrait).length})'),
-                          Tab(text: 'Landscape (${_backgroundFilesFor(BackgroundCategory.landscape).length})'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: TabBarView(
-                        children: BackgroundCategory.values.map((category) {
-                          final files = _backgroundFilesFor(category);
-                          if (files.isEmpty) {
-                            return Center(
-                              child: Text(
-                                'Tidak ada background ${_backgroundCategoryLabel(category).toLowerCase()}.',
-                                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white70),
-                                textAlign: TextAlign.center,
-                              ),
-                            );
-                          }
-
-                          return GridView.count(
+                          )
+                        : GridView.count(
                             crossAxisCount: 2,
                             crossAxisSpacing: 14,
                             mainAxisSpacing: 14,
@@ -1200,17 +1236,14 @@ try {
                                 .map(
                                   (backgroundFile) => _buildBackgroundChoiceCard(
                                     backgroundFile,
-                                    category,
+                                    preferredCategory,
                                     sheetContext,
                                   ),
                                 )
                                 .toList(),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                  ],
-                ),
+                          ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1221,7 +1254,6 @@ try {
     if (nextBackground == null || !mounted) return;
     setState(() {
       _selectedBackgroundFile = nextBackground;
-      _selectedBackgroundCategory = _backgroundCategoryForFile(nextBackground);
     });
     _scheduleExportPreviewRefresh();
   }
@@ -1370,6 +1402,17 @@ try {
       return BackgroundCategory.portrait;
     }
     return BackgroundCategory.landscape;
+  }
+
+  BackgroundCategory _backgroundCategoryForLayout(_EditLayout layout) {
+    return switch (layout) {
+      _EditLayout.landscapePoster => BackgroundCategory.landscape,
+      _EditLayout.wantedPoster ||
+      _EditLayout.grid ||
+      _EditLayout.verticalStrip ||
+      _EditLayout.horizontalStrip ||
+      _EditLayout.polaroid => BackgroundCategory.portrait,
+    };
   }
 
   String _backgroundCategoryLabel(BackgroundCategory category) {
@@ -1544,7 +1587,8 @@ try {
             ],
           ),
           const SizedBox(height: 16),
-          Expanded(
+          AspectRatio(
+            aspectRatio: 4 / 3,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(28),
               child: Container(
@@ -1636,11 +1680,11 @@ try {
   }
 
   Future<ui.Image> _renderExportPreviewImage() async {
-    final spec = _LayoutExportSpec.forPreview(
+    final spec = _LayoutExportSpec.forLayout(
       layout: _selectedLayout,
       photoCount: widget.photoPaths.length,
     );
-    final decodedPhotos = <ui.Image>[]; 
+    final decodedPhotos = <ui.Image>[];
     ui.Image? backgroundImage;
     try {
       for (final path in widget.photoPaths) {
@@ -2463,6 +2507,7 @@ try {
   }
 
   Widget _buildToolsCard(BuildContext context) {
+    // Panel tools ini jadi tempat cepat untuk background, tone, dan aksi final.
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -2506,8 +2551,6 @@ try {
             subtitle: _backgroundInFront ? 'Tampilkan di hadapan foto' : 'Tampilkan di belakang foto',
             onTap: () => setState(() => _backgroundInFront = !_backgroundInFront),
           ),
-          
-          
           const SizedBox(height: 10),
           _buildEditActionChip(
             icon: Icons.palette_outlined,
@@ -2522,7 +2565,7 @@ try {
             subtitle: 'Export preview',
             onTap: () {},
           ),
-          const Spacer(),
+          const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(

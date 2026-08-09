@@ -4,6 +4,7 @@ import 'package:window_manager/window_manager.dart';
 import 'home_page.dart';
 
 class LayoutSelectionPage extends StatefulWidget {
+  // Halaman ini dipakai sebelum masuk kamera untuk memilih format sesi foto.
   const LayoutSelectionPage({
     super.key,
     required this.packageName,
@@ -84,6 +85,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
   @override
   void initState() {
     super.initState();
+    // Sync fullscreen dilakukan setelah frame pertama agar window manager sudah siap.
     _selectedLayoutId = widget.initialBackgroundKey;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncFullscreenState();
@@ -115,6 +117,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
       _layouts.firstWhere((layout) => layout.id == _selectedLayoutId, orElse: () => _layouts.first);
 
   Future<void> _startCameraSession() async {
+    // Setelah layout dipilih, user diarahkan ke home page untuk mulai capture.
     await Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => HomePage(
@@ -132,6 +135,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Layout chooser dibuat visual agar cepat dibandingkan antar template.
     final selectedLayout = _selectedLayout;
 
     return Scaffold(

@@ -17,6 +17,7 @@ import '../core/services/local_camera_preview_service.dart';
 import '../widgets/local_camera_live_view.dart';
 
 class HomePage extends StatefulWidget {
+  // Halaman kerja utama: kamera live, capture session, galeri, dan tool cepat.
   const HomePage({
     super.key,
     required this.packageName,
@@ -46,6 +47,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // Sinkronisasi settings dilakukan setelah context siap agar provider bisa dibaca aman.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       _settingsNotifier = context.read<AppSettingsNotifier>();
@@ -61,6 +63,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _syncCameraWithSettings() async {
+    // Kalau settings berubah saat sync berjalan, antrean ini memastikan state terakhir yang dipakai.
     if (!mounted) return;
     if (_isSyncingCamera) {
       _cameraSyncQueued = true;
@@ -167,6 +170,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _startCaptureSession() async {
+    // Alur capture dijalankan sebagai sesi terkontrol, bukan satu foto lepas.
     final cameraManager = context.read<CameraManagerService>();
     final storageService = context.read<StorageService>();
     final settings = context.read<AppSettingsNotifier>().settings;
@@ -265,6 +269,7 @@ class _HomePageState extends State<HomePage> {
     required int defaultCountdown,
     required String defaultBackgroundKey,
   }) {
+    // Dialog ini menentukan layout, countdown, dan jumlah foto sebelum sesi dimulai.
     return showDialog<_CaptureSessionOptions>(
       context: context,
       builder: (dialogContext) {
@@ -370,6 +375,7 @@ class _HomePageState extends State<HomePage> {
     required int totalShots,
     required int previewSeconds,
   }) {
+    // Setelah tiap foto, user diberi waktu singkat untuk retake atau lanjut.
     return showDialog<_CapturePreviewAction>(
       context: context,
       barrierDismissible: false,
@@ -385,6 +391,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Index halaman dipakai untuk berpindah antara camera, gallery, settings, dan diagnostics.
     final cameraManager = context.watch<CameraManagerService>();
 
     final pages = <Widget>[
@@ -586,6 +593,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildCameraStage() {
+    // Live view lokal ditampilkan sebagai latar utama saat sesi capture aktif.
     final localPreview = context.watch<LocalCameraPreviewService>();
 
     return ColoredBox(

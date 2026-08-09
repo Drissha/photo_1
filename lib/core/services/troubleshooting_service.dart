@@ -6,6 +6,7 @@ import 'camera_manager_service.dart';
 import 'storage_service.dart';
 
 class TroubleshootingService {
+  // Monitoring ringan ini membantu mendeteksi kamera/storage yang putus selama sesi berjalan.
   TroubleshootingService({
     required this.cameraManager,
     required this.storageService,
@@ -20,6 +21,7 @@ class TroubleshootingService {
   Stream<AppError> get errors => _errorController.stream;
 
   void startMonitoring() {
+    // Timer periodik dipakai agar pengecekan tetap sederhana dan mudah ditrace saat debugging.
     _monitorTimer?.cancel();
     _monitorTimer = Timer.periodic(const Duration(seconds: 1), (_) async {
       final error = await runDiagnostics();
@@ -35,6 +37,7 @@ class TroubleshootingService {
   }
 
   Future<AppError?> runDiagnostics() async {
+    // Cek dasar dibuat singkat: kamera harus ready dan folder penyimpanan harus bisa diakses.
     if (!cameraManager.isInitialized) {
       return const AppError(
         code: 'CAM002',
@@ -60,6 +63,7 @@ class TroubleshootingService {
   }
 
   Future<void> autoRepair(AppError error) async {
+    // Aksi auto-repair dipetakan dari kode error agar respons tetap konsisten.
     switch (error.code) {
       case 'CAM002':
         await cameraManager.reconnectCamera();

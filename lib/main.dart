@@ -7,9 +7,11 @@ import 'core/theme/app_theme.dart';
 import 'pages/landing_page.dart';
 
 Future<void> main() async {
+  // Inisialisasi binding dan window manager sebelum UI pertama dirender.
   WidgetsFlutterBinding.ensureInitialized();
   await windowManager.ensureInitialized();
 
+  // Konfigurasi ukuran awal agar aplikasi langsung masuk ke kanvas kerja yang nyaman.
   const windowOptions = WindowOptions(
     size: Size(1400, 900),
     minimumSize: Size(1200, 800),
@@ -30,6 +32,7 @@ class PapyrusPhotoboothApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Semua service penting disuntikkan dari sini supaya page tetap tipis.
     return MultiProvider(
       providers: AppProviders.providers,
       child: Consumer<AppSettingsNotifier>(

@@ -11,6 +11,7 @@ import '../models/app_settings.dart';
 import '../models/camera_device.dart';
 
 class CameraManagerService extends ChangeNotifier {
+  // Service ini menjadi sumber kebenaran untuk kamera capture dan command DigiCamControl.
   CameraManagerService();
 
   List<CameraDevice> _availableDevices = const [];
@@ -59,6 +60,7 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   void updateConnectionSettings(AppSettings settings) {
+    // Setting koneksi diserap ulang setiap kali user mengubah port atau path executable.
     _commandPort = _normalizePort(settings.digicamControlCommandPort, AppConstants.digicamControlCommandPort);
     _liveViewPort = _normalizeDistinctPort(
       settings.digicamControlLiveViewPort,
@@ -71,6 +73,7 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<void> refreshDevices() async {
+    // Daftar kamera di-refresh sebelum initialize supaya pilihan device selalu mutakhir.
     try {
       final lines = await _runListCommand('cameras');
       final cameras = lines
@@ -110,6 +113,7 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<void> initializeCamera({String? cameraName}) async {
+    // Token init mencegah race condition saat user berpindah kamera terlalu cepat.
     final token = ++_initializationToken;
     _isInitializing = true;
     notifyListeners();
@@ -200,6 +204,7 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<void> applyCameraSettings(AppSettings settings) async {
+    // Semua slider di settings dipetakan ke perintah DigiCamControl secara berurutan.
     if (!_isInitialized || _selectedDevice == null) {
       return;
     }
@@ -245,6 +250,7 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<String> capturePhoto(String saveFolder) async {
+    // Capture menunggu file benar-benar muncul agar UI tidak lanjut terlalu cepat.
     if (!_isInitialized || _selectedDevice == null) {
       throw AppError(
         code: 'CAM003',
@@ -300,6 +306,7 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<void> stopLiveView({required bool keepInitialized, required bool notify}) async {
+    // Live view dan heartbeat dihentikan saat sesi selesai atau kamera dimatikan.
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
     _isLiveViewPaused = false;
@@ -328,6 +335,7 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   void _startHeartbeat() {
+    // Heartbeat sederhana dipakai untuk menandai bahwa kamera masih merespons.
     _heartbeatTimer?.cancel();
     _heartbeatTick = 0;
     _heartbeatTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -341,6 +349,7 @@ class CameraManagerService extends ChangeNotifier {
     List<String> commandParts, {
     required bool allowWebFallback,
   }) async {
+    // Jalur native diprioritaskan, lalu fallback ke web API kalau executable tidak tersedia.
     if (_hasRemoteCmdPath) {
       final result = await Process.run(
         _remoteCmdPath,
@@ -365,6 +374,7 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<String> _runWebCommand(List<String> commandParts) async {
+    // Web fallback ini meniru command line DigiCamControl lewat endpoint HTTP lokal.
     if (commandParts.isEmpty) {
       throw StateError('Missing DigiCamControl command.');
     }
@@ -482,6 +492,7 @@ class CameraManagerService extends ChangeNotifier {
   }
 
   Future<String> _resolveCapturedFile(File destination, DateTime captureStartedAt) async {
+    // Kalau nama file output tidak persis sama, kita cari file foto yang paling baru dibuat.
     if (await destination.exists()) {
       return destination.path;
     }
@@ -504,6 +515,7 @@ class CameraManagerService extends ChangeNotifier {
     DateTime captureStartedAt,
     String destinationBaseName,
   ) {
+    // Kandidat paling relevan biasanya file yang baru muncul setelah perintah capture.
     if (!directory.existsSync()) {
       return const [];
     }

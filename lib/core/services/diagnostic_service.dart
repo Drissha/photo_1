@@ -5,6 +5,7 @@ import 'settings_repository.dart';
 import 'storage_service.dart';
 
 class DiagnosticService {
+  // Service ini mengumpulkan status teknis yang bisa dipakai halaman diagnostics.
   DiagnosticService({
     required this.cameraManager,
     required this.storageService,
@@ -16,6 +17,7 @@ class DiagnosticService {
   final SettingsRepository settingsRepository;
 
   Future<Map<String, dynamic>> collectDiagnostics() async {
+    // Snapshot diagnostik dibuat dari sumber live, bukan cache statis.
     final settings = await settingsRepository.loadSettings();
     final saveDirectory = await storageService.ensureSaveDirectory(settings.saveFolderPath);
     final appDir = await getApplicationSupportDirectory();
@@ -38,6 +40,7 @@ class DiagnosticService {
   }
 
   Future<AppError?> runCaptureTest() async {
+    // Tes capture memvalidasi jalur kamera + storage secara end-to-end.
     try {
       await cameraManager.capturePhoto(await storageService.getDefaultSaveFolder());
       return null;

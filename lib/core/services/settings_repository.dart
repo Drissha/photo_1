@@ -7,6 +7,7 @@ import '../constants/app_constants.dart';
 import '../models/app_settings.dart';
 
 abstract class SettingsRepository {
+  // Abstraksi kecil ini memudahkan perpindahan backend storage di masa depan.
   Future<AppSettings> loadSettings();
   Future<void> saveSettings(AppSettings settings);
 }
@@ -20,6 +21,7 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
 
   @override
   Future<AppSettings> loadSettings() async {
+    // Semua setting disimpan sebagai JSON tunggal untuk menjaga migrasi tetap simpel.
     final prefs = _sharedPreferences ?? await SharedPreferences.getInstance();
     final jsonString = prefs.getString(_storageKey);
     if (jsonString == null || jsonString.isEmpty) {
@@ -87,6 +89,7 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
 
   @override
   Future<void> saveSettings(AppSettings settings) async {
+    // Simpan snapshot lengkap agar satu sumber kebenaran tetap konsisten.
     final prefs = _sharedPreferences ?? await SharedPreferences.getInstance();
     final encoded = jsonEncode({
       'themeMode': settings.themeMode.name,
@@ -130,6 +133,7 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
     required List<String> keys,
     required int fallback,
   }) {
+    // Beberapa key lama masih didukung supaya data versi lama tetap bisa dibaca.
     for (final key in keys) {
       final value = decoded[key];
       final parsed = _parsePort(value);
@@ -141,6 +145,7 @@ class SharedPreferencesSettingsRepository implements SettingsRepository {
   }
 
   int? _parsePort(dynamic value) {
+    // Port bisa datang sebagai angka, string, atau URL lengkap dari versi lama.
     if (value == null) {
       return null;
     }

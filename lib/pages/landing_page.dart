@@ -11,6 +11,7 @@ import 'layout_selection_page.dart';
 import 'settings_page.dart';
 
 class LandingPage extends StatefulWidget {
+  // Halaman pembuka ini menjadi titik masuk ke menu utama dan flow capture.
   const LandingPage({super.key});
 
   @override
@@ -24,6 +25,7 @@ class _LandingPageState extends State<LandingPage> {
   @override
   void initState() {
     super.initState();
+    // Setelah frame pertama siap, sync fullscreen dan refresh daftar kamera.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncFullscreenState();
       context.read<CameraManagerService>().refreshDevices();
@@ -60,6 +62,7 @@ class _LandingPageState extends State<LandingPage> {
   }
 
   Future<void> _startJourney() async {
+    // Tombol start langsung masuk ke pemilihan layout sebelum sesi kamera.
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => const LayoutSelectionPage(
@@ -73,6 +76,7 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Hero screen dirancang sebagai landing visual, bukan sekadar menu tekstual.
     return Scaffold(
       body: Stack(
         children: [

@@ -6,6 +6,7 @@ import 'package:flutter_mjpeg/flutter_mjpeg.dart';
 import '../core/services/camera_manager_service.dart';
 
 class DigiCamLiveView extends StatefulWidget {
+  // Widget ini menampilkan stream live view dari DigiCamControl, lalu fallback bila perlu.
   const DigiCamLiveView({
     super.key,
     required this.cameraManager,
@@ -24,6 +25,7 @@ class DigiCamLiveView extends StatefulWidget {
 class _DigiCamLiveViewState extends State<DigiCamLiveView> {
   @override
   Widget build(BuildContext context) {
+    // Jika live view dimatikan, widget ini sengaja menampilkan state kosong yang jelas.
     if (!widget.cameraManager.isLiveViewEnabled) {
       return const Center(
         child: Column(
@@ -113,6 +115,7 @@ class _LiveViewFallbackState extends State<_LiveViewFallback> {
 
   @override
   Widget build(BuildContext context) {
+    // Saat MJPEG gagal, fallback mengambil frame image statis secara berkala.
     final url = widget.cameraManager.liveViewImageUrl;
     if (url.isEmpty) {
       return const Center(child: CircularProgressIndicator());

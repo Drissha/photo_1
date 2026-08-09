@@ -1,4 +1,5 @@
 class PhotoTake {
+  // Satu sesi pemotretan beserta folder dan jumlah fotonya.
   const PhotoTake({
     required this.path,
     required this.name,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_constants.dart';
 
 class AppSettings {
+  // Semua preferensi utama aplikasi disimpan dalam satu immutable model.
   const AppSettings({
     this.themeMode = ThemeMode.dark,
     this.language = 'English',
@@ -67,12 +68,15 @@ class AppSettings {
   final bool cameraFlipVertical;
 
   String get digicamControlCommandBaseUrl =>
+      // Base URL untuk command/capture DigiCamControl.
       AppConstants.buildDigicamControlBaseUrl(digicamControlCommandPort);
 
   String get digicamControlLiveViewBaseUrl =>
+      // Base URL terpisah untuk live view supaya port command tidak bentrok.
       AppConstants.buildDigicamControlBaseUrl(digicamControlLiveViewPort);
 
   AppSettings copyWith({
+    // `copyWith` dipakai luas supaya update settings tetap aman dan terarah.
     ThemeMode? themeMode,
     String? language,
     String? saveFolderPath,

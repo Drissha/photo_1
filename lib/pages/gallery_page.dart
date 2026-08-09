@@ -9,6 +9,7 @@ import '../core/services/app_providers.dart';
 import '../core/services/storage_service.dart';
 
 class GalleryPage extends StatefulWidget {
+  // Gallery menampilkan hasil sesi yang sudah tersimpan di folder output.
   const GalleryPage({super.key});
 
   @override
@@ -23,6 +24,7 @@ class _GalleryPageState extends State<GalleryPage> {
   @override
   void initState() {
     super.initState();
+    // Data take dimuat setelah frame pertama supaya provider folder sudah tersedia.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadTakes(force: true);
     });
@@ -44,6 +46,7 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   Future<void> _openTake(PhotoTake take) async {
+    // Bottom sheet dipakai supaya user bisa menelusuri isi satu sesi tanpa pindah halaman.
     final photos = await context.read<StorageService>().listPhotos(take.path);
     if (!mounted) return;
 
@@ -119,6 +122,7 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   Future<void> _showPhotoViewer(CapturedPhoto photo) async {
+    // Viewer penuh memudahkan inspeksi detail foto saat memilih hasil terbaik.
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -149,6 +153,7 @@ class _GalleryPageState extends State<GalleryPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Filter sederhana ini cukup untuk navigasi cepat antar sesi foto.
     final filteredTakes = _takes
         .where((take) => take.name.toLowerCase().contains(_query.toLowerCase()))
         .toList();

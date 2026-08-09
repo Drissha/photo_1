@@ -7,6 +7,7 @@ import '../core/services/camera_manager_service.dart';
 import '../core/services/storage_service.dart';
 
 class CameraControlsCard extends StatefulWidget {
+  // Card kontrol ini memberi akses cepat ke kamera capture dan tindakan dasar.
   const CameraControlsCard({super.key, required this.cameraManager});
 
   final CameraManagerService cameraManager;
@@ -31,6 +32,7 @@ class _CameraControlsCardState extends State<CameraControlsCard> {
   }
 
   Future<void> _toggleFullscreen() async {
+    // Shortcut fullscreen dipusatkan di sini supaya parity dengan halaman utama terjaga.
     final nextValue = !_isFullscreen;
     await windowManager.setFullScreen(nextValue);
     if (!mounted) return;
@@ -39,6 +41,7 @@ class _CameraControlsCardState extends State<CameraControlsCard> {
 
   @override
   Widget build(BuildContext context) {
+    // Kontrol ini langsung mengoper ke service agar state kamera tetap satu sumber.
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
