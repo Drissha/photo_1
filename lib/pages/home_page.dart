@@ -182,6 +182,7 @@ class _HomePageState extends State<HomePage> {
     final options = await _showCaptureOptionsDialog(
       defaultCountdown: settings.autoCaptureDelaySeconds,
       defaultBackgroundKey: widget.initialBackgroundKey,
+      defaultPhotoCount: widget.photoCount,
     );
     if (options == null || !mounted) return;
 
@@ -268,6 +269,7 @@ class _HomePageState extends State<HomePage> {
   Future<_CaptureSessionOptions?> _showCaptureOptionsDialog({
     required int defaultCountdown,
     required String defaultBackgroundKey,
+    required int defaultPhotoCount,
   }) {
     // Dialog ini menentukan layout, countdown, dan jumlah foto sebelum sesi dimulai.
     return showDialog<_CaptureSessionOptions>(
@@ -275,7 +277,7 @@ class _HomePageState extends State<HomePage> {
       builder: (dialogContext) {
         var selectedCountdown = defaultCountdown;
         var selectedBackgroundKey = defaultBackgroundKey;
-        var selectedPhotoCount = _photoCountForBackground(defaultBackgroundKey);
+        var selectedPhotoCount = defaultPhotoCount;
         const backgroundChoices = [
           _LayoutChoice(key: 'portrait1', label: 'Portrait 1 Take', description: 'Template portrait, 1 foto'),
           _LayoutChoice(key: 'portrait2', label: 'Portrait 2 Take', description: 'Template portrait, 2 foto'),
@@ -319,7 +321,7 @@ class _HomePageState extends State<HomePage> {
                       if (value == null) return;
                       setDialogState(() {
                         selectedBackgroundKey = value;
-                        selectedPhotoCount = _photoCountForBackground(value);
+                        selectedPhotoCount = _photoCountForBackground(value, fallback: defaultPhotoCount);
                       });
                     },
                   ),
@@ -646,7 +648,7 @@ class _LayoutChoice {
   final String description;
 }
 
-int _photoCountForBackground(String backgroundKey) {
+int _photoCountForBackground(String backgroundKey, {int fallback = 3}) {
   switch (backgroundKey) {
     case 'portrait1':
       return 1;
@@ -661,7 +663,7 @@ int _photoCountForBackground(String backgroundKey) {
     case 'portrait6':
       return 6;
     default:
-      return 3;
+      return fallback;
   }
 }
 

@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../core/services/dashboard_api_service.dart';
 import '../core/services/storage_service.dart';
 
 // Halaman edit menggabungkan foto hasil capture, background, tone, dan export final.
@@ -34,8 +35,10 @@ class _EditPageState extends State<EditPage> {
   bool _isReturning = false;
   bool _isExporting = false;
   bool _isPreviewRendering = false;
+  bool _isSyncingData = false;
   bool _backgroundInFront = true;
   String? _exportedFilePath;
+  String? _lastSyncMessage;
   ui.Image? _previewImage;
   int _previewRenderToken = 0;
   Timer? _previewRefreshTimer;
@@ -199,6 +202,7 @@ try {
         );
         await outFile.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
         _exportedFilePath = outFile.path;
+        await _queueOrUploadExportedPhoto(outFile.path);
         return outFile.path;
       } finally {
         for (final image in decodedPhotos) {
@@ -209,6 +213,18 @@ try {
       if (mounted) {
         setState(() => _isExporting = false);
       }
+    }
+  }
+
+  Future<void> _queueOrUploadExportedPhoto(String path) async {
+    try {
+      final api = context.read<ApiController>();
+      await api.uploadOrQueuePhoto(
+        filePath: path,
+        albumName: widget.takeFolderName,
+      );
+    } catch (_) {
+      // Upload offline tidak boleh mengganggu alur edit; file sudah aman tersimpan lokal.
     }
   }
 
@@ -1164,6 +1180,33 @@ try {
       }
     });
     _scheduleExportPreviewRefresh();
+  }
+
+  Future<void> _syncRemoteData() async {
+    if (_isSyncingData) return;
+    setState(() => _isSyncingData = true);
+
+    try {
+      final api = context.read<ApiController>();
+      final summary = await api.syncAll(albumName: widget.takeFolderName);
+      await _loadBackgroundImages();
+      if (!mounted) return;
+      setState(() {
+        _lastSyncMessage = summary.message;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync data selesai: ${summary.message}')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync data gagal: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncingData = false);
+      }
+    }
   }
 
   Future<void> _chooseBackground() async {
@@ -2531,6 +2574,13 @@ try {
             style: TextStyle(color: Colors.white70, height: 1.5),
           ),
           const SizedBox(height: 18),
+          _buildEditActionChip(
+            icon: _isSyncingData ? Icons.sync_problem_outlined : Icons.sync_outlined,
+            title: _isSyncingData ? 'Sync data...' : 'Sync data',
+            subtitle: _lastSyncMessage ?? 'Download background dan upload antrian offline',
+            onTap: _isSyncingData ? () {} : () => _syncRemoteData(),
+          ),
+          const SizedBox(height: 10),
           _buildEditActionChip(
             icon: Icons.auto_fix_high_outlined,
             title: 'Auto retouch',

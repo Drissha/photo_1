@@ -60,6 +60,36 @@ class StorageService {
     return defaultPath;
   }
 
+  Future<String> getApiBackgroundCacheFolder() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final defaultPath = p.join(directory.path, 'PapyrusBackgrounds', 'Remote');
+    final folder = Directory(defaultPath);
+    if (!folder.existsSync()) {
+      await folder.create(recursive: true);
+    }
+    return defaultPath;
+  }
+
+  Future<String> getApiUploadQueueFolder() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final defaultPath = p.join(directory.path, 'PapyrusApiQueue');
+    final folder = Directory(defaultPath);
+    if (!folder.existsSync()) {
+      await folder.create(recursive: true);
+    }
+    return defaultPath;
+  }
+
+  Future<String> getApiLayoutCacheFolder() async {
+    final directory = await getApplicationDocumentsDirectory();
+    final defaultPath = p.join(directory.path, 'PapyrusLayoutsCache');
+    final folder = Directory(defaultPath);
+    if (!folder.existsSync()) {
+      await folder.create(recursive: true);
+    }
+    return defaultPath;
+  }
+
   Future<List<File>> listBackgroundImages(String folderPath) async {
     final categorized = await loadBackgroundLibrary(folderPath);
     return [

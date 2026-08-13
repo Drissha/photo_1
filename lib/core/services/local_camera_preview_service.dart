@@ -189,7 +189,7 @@ class LocalCameraPreviewService extends ChangeNotifier {
     }
 
     if (lastError != null) {
-      throw lastError!;
+      throw lastError;
     }
     return const [];
   }

@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../core/services/dashboard_api_service.dart';
 import 'home_page.dart';
 
 class LayoutSelectionPage extends StatefulWidget {
@@ -23,9 +27,14 @@ class LayoutSelectionPage extends StatefulWidget {
 class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
   bool _isFullscreen = false;
   bool _showUtilityMenu = false;
+  bool _isSyncingData = false;
+  bool _isLoadingLayouts = false;
+  int _remoteTemplateCount = 0;
+  String? _lastSyncMessage;
   late String _selectedLayoutId;
+  List<_LayoutOption> _layouts = _defaultLayouts;
 
-  final List<_LayoutOption> _layouts = const [
+  static const List<_LayoutOption> _defaultLayouts = [
     _LayoutOption(
       id: 'portrait1',
       title: 'Portrait 1 Take',
@@ -89,7 +98,46 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
     _selectedLayoutId = widget.initialBackgroundKey;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncFullscreenState();
+      _loadLayoutsFromApi();
     });
+  }
+
+  Future<void> _loadLayoutsFromApi() async {
+    if (_isLoadingLayouts) return;
+    setState(() => _isLoadingLayouts = true);
+
+    try {
+      final api = context.read<ApiController>();
+      final templates = await api.fetchTemplatesWithCache();
+      if (!mounted) return;
+
+      final remoteLayouts = templates.map(_layoutFromTemplate).whereType<_LayoutOption>().toList();
+      if (remoteLayouts.isNotEmpty) {
+        setState(() {
+          _layouts = remoteLayouts;
+          if (!_layouts.any((layout) => layout.id == _selectedLayoutId)) {
+            _selectedLayoutId = _layouts.first.id;
+          }
+          _remoteTemplateCount = remoteLayouts.length;
+          _lastSyncMessage = 'Layout dimuat dari API dan cache';
+        });
+      } else {
+        setState(() {
+          _layouts = _defaultLayouts;
+          _lastSyncMessage = 'Layout fallback dipakai dari storage lokal';
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _layouts = _defaultLayouts;
+        _lastSyncMessage = 'Offline: layout diambil dari cache/fallback';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingLayouts = false);
+      }
+    }
   }
 
   Future<void> _syncFullscreenState() async {
@@ -107,6 +155,50 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
 
   Future<void> _exitApp() async {
     await windowManager.close();
+  }
+
+  Future<void> _syncRemoteData() async {
+    if (_isSyncingData) return;
+    setState(() => _isSyncingData = true);
+
+    try {
+      final api = context.read<ApiController>();
+      final templates = await api.fetchTemplatesWithCache();
+      final remoteLayouts = templates.map(_layoutFromTemplate).whereType<_LayoutOption>().toList();
+      if (remoteLayouts.isNotEmpty && mounted) {
+        setState(() {
+          _layouts = remoteLayouts;
+          if (!_layouts.any((layout) => layout.id == _selectedLayoutId)) {
+            _selectedLayoutId = _layouts.first.id;
+          }
+        });
+      }
+      await api.syncCurrentLayout(
+        layoutId: _selectedLayout.id,
+        name: _selectedLayout.title,
+        photoCount: _selectedLayout.photoCount,
+        orientation: _selectedLayout.orientation.label,
+        accentColor: '#${_selectedLayout.accentColor.value.toRadixString(16).padLeft(8, '0')}',
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _remoteTemplateCount = remoteLayouts.length;
+        _lastSyncMessage = 'Sync layout selesai: ${remoteLayouts.length} template disimpan ke storage';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(_lastSyncMessage!)),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sync layout gagal: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncingData = false);
+      }
+    }
   }
 
   void _toggleUtilityMenu() {
@@ -212,6 +304,18 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
                                               crossAxisAlignment: CrossAxisAlignment.stretch,
                                               children: [
                                                 FilledButton.tonalIcon(
+                                                  onPressed: _isSyncingData ? null : _syncRemoteData,
+                                                  icon: _isSyncingData
+                                                      ? const SizedBox(
+                                                          width: 18,
+                                                          height: 18,
+                                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                                        )
+                                                      : const Icon(Icons.sync),
+                                                  label: Text(_isSyncingData ? 'Syncing...' : 'Sync Data'),
+                                                ),
+                                                const SizedBox(height: 10),
+                                                FilledButton.tonalIcon(
                                                   onPressed: _toggleFullscreen,
                                                   icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
                                                   label: Text(_isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'),
@@ -230,6 +334,22 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
                                     )
                                   : const SizedBox.shrink(),
                             ),
+                            if (_lastSyncMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Container(
+                                  constraints: const BoxConstraints(maxWidth: 240),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    '$_lastSyncMessage\nRemote templates: $_remoteTemplateCount',
+                                    style: const TextStyle(color: Colors.white70),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -417,6 +537,10 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
                     style: const TextStyle(color: Colors.white70, height: 1.4),
                   ),
                   const SizedBox(height: 18),
+                  if (_isLoadingLayouts) ...[
+                    const LinearProgressIndicator(minHeight: 2),
+                    const SizedBox(height: 12),
+                  ],
                   LayoutBuilder(
                     builder: (context, constraints) {
                       final width = constraints.maxWidth;
@@ -549,6 +673,93 @@ class _LayoutCard extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  _LayoutOption? _layoutFromTemplate(RemoteTemplateRecord template) {
+    final rawData = template.raw['data'];
+    final Map<String, dynamic> data = switch (rawData) {
+      String value when value.trim().isNotEmpty => _decodeTemplateData(value),
+      Map value => value.cast<String, dynamic>(),
+      _ => const <String, dynamic>{},
+    };
+
+    final layoutId = (data['layoutId'] ?? template.id ?? template.name).toString().trim();
+    final photoCount = _readPhotoCount(data['photoCount']) ?? _readPhotoCount(data['shots']) ?? 3;
+    final orientation = _parseOrientation(data['orientation']?.toString());
+    final accentColor = _parseColor(data['accentColor']?.toString()) ?? _fallbackAccentColor(layoutId, orientation, photoCount);
+    final previewType = _previewTypeFor(photoCount, orientation);
+
+    return _LayoutOption(
+      id: layoutId.isNotEmpty ? layoutId : template.name,
+      title: template.name,
+      subtitle: data['description']?.toString().trim().isNotEmpty == true
+          ? data['description'].toString()
+          : '$photoCount foto, ${orientation.label} layout',
+      photoCount: photoCount,
+      orientation: orientation,
+      accentColor: accentColor,
+      previewType: previewType,
+    );
+  }
+
+  Map<String, dynamic> _decodeTemplateData(String value) {
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return decoded.cast<String, dynamic>();
+      }
+    } catch (_) {}
+    return const <String, dynamic>{};
+  }
+
+  int? _readPhotoCount(dynamic value) {
+    if (value == null) return null;
+    return int.tryParse(value.toString());
+  }
+
+  _LayoutOrientation _parseOrientation(String? value) {
+    final normalized = value?.toLowerCase().trim();
+    return normalized == 'landscape' ? _LayoutOrientation.landscape : _LayoutOrientation.portrait;
+  }
+
+  Color? _parseColor(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    var normalized = value.trim().replaceFirst('#', '');
+    if (normalized.length == 6) {
+      normalized = 'FF$normalized';
+    }
+    final parsed = int.tryParse(normalized, radix: 16);
+    if (parsed == null) return null;
+    return Color(parsed);
+  }
+
+  Color _fallbackAccentColor(String layoutId, _LayoutOrientation orientation, int photoCount) {
+    return switch ((layoutId, orientation, photoCount)) {
+      (_, _LayoutOrientation.landscape, 4) => const Color(0xFFF4B942),
+      (_, _LayoutOrientation.landscape, 6) => const Color(0xFFFF8A5B),
+      (_, _LayoutOrientation.portrait, 1) => const Color(0xFFFFC857),
+      (_, _LayoutOrientation.portrait, 2) => const Color(0xFF7AE582),
+      (_, _LayoutOrientation.portrait, 3) => const Color(0xFF7BDFF2),
+      (_, _LayoutOrientation.portrait, 6) => const Color(0xFFE58AF7),
+      _ => const Color(0xFFFFC857),
+    };
+  }
+
+  _LayoutPreviewType _previewTypeFor(int photoCount, _LayoutOrientation orientation) {
+    if (orientation == _LayoutOrientation.landscape) {
+      return photoCount >= 6 ? _LayoutPreviewType.landscape6 : _LayoutPreviewType.landscape4;
+    }
+
+    return switch (photoCount) {
+      1 => _LayoutPreviewType.portrait1,
+      2 => _LayoutPreviewType.portrait2,
+      3 => _LayoutPreviewType.portrait3,
+      6 => _LayoutPreviewType.portrait6,
+      _ => _LayoutPreviewType.portrait3,
+    };
   }
 }
 

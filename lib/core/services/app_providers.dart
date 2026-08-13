@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/app_settings.dart';
 import 'camera_manager_service.dart';
 import 'diagnostic_service.dart';
+import 'dashboard_api_service.dart';
 import 'local_camera_preview_service.dart';
 import 'settings_repository.dart';
 import 'storage_service.dart';
@@ -14,6 +15,11 @@ class AppProviders {
   // Semua dependency utama dipasang di sini agar setiap page bisa membaca service yang sama.
   static List<SingleChildWidget> providers = [
     Provider<StorageService>(create: (_) => StorageService()),
+    Provider<ApiController>(
+      create: (context) => ApiController(
+        storageService: context.read<StorageService>(),
+      ),
+    ),
     Provider<SettingsRepository>(create: (_) => SharedPreferencesSettingsRepository()),
     ChangeNotifierProvider<CameraManagerService>(create: (_) => CameraManagerService()),
     ChangeNotifierProvider<LocalCameraPreviewService>(create: (_) => LocalCameraPreviewService()),
