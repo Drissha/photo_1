@@ -23,11 +23,13 @@ class HomePage extends StatefulWidget {
     required this.packageName,
     required this.photoCount,
     required this.initialBackgroundKey,
+    this.layoutTemplateData,
   });
 
   final String packageName;
   final int photoCount;
   final String initialBackgroundKey;
+  final Map<String, dynamic>? layoutTemplateData;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -249,6 +251,7 @@ class _HomePageState extends State<HomePage> {
             takeFolderPath: takeFolder,
             takeFolderName: Uri.file(takeFolder).pathSegments.last,
             initialBackgroundKey: options.backgroundKey,
+            layoutTemplateData: widget.layoutTemplateData,
           ),
         );
         await Navigator.of(context, rootNavigator: true).push(route);
@@ -276,16 +279,6 @@ class _HomePageState extends State<HomePage> {
       context: context,
       builder: (dialogContext) {
         var selectedCountdown = defaultCountdown;
-        var selectedBackgroundKey = defaultBackgroundKey;
-        var selectedPhotoCount = defaultPhotoCount;
-        const backgroundChoices = [
-          _LayoutChoice(key: 'portrait1', label: 'Portrait 1 Take', description: 'Template portrait, 1 foto'),
-          _LayoutChoice(key: 'portrait2', label: 'Portrait 2 Take', description: 'Template portrait, 2 foto'),
-          _LayoutChoice(key: 'portrait3', label: 'Portrait 3 Take', description: 'Template portrait, 3 foto'),
-          _LayoutChoice(key: 'landscape4', label: 'Landscape 4 Take', description: 'Template landscape, 4 foto'),
-          _LayoutChoice(key: 'landscape6', label: 'Landscape 6 Take', description: 'Template landscape, 6 foto'),
-          _LayoutChoice(key: 'portrait6', label: 'Portrait 6 Take', description: 'Template portrait, 6 foto'),
-        ];
 
         return StatefulBuilder(
           builder: (context, setDialogState) {
@@ -298,34 +291,11 @@ class _HomePageState extends State<HomePage> {
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Jumlah foto mengikuti template: $selectedPhotoCount',
+                      'Jumlah foto mengikuti template: $defaultPhotoCount',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedBackgroundKey,
-                    decoration: const InputDecoration(
-                      labelText: 'Background awal',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: backgroundChoices
-                        .map(
-                          (background) => DropdownMenuItem(
-                            value: background.key,
-                            child: Text('${background.label} - ${background.description}'),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value == null) return;
-                      setDialogState(() {
-                        selectedBackgroundKey = value;
-                        selectedPhotoCount = _photoCountForBackground(value, fallback: defaultPhotoCount);
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
                   DropdownButtonFormField<int>(
                     initialValue: selectedCountdown,
                     decoration: const InputDecoration(
@@ -356,8 +326,8 @@ class _HomePageState extends State<HomePage> {
                       dialogContext,
                       _CaptureSessionOptions(
                         countdownSeconds: selectedCountdown,
-                        backgroundKey: selectedBackgroundKey,
-                        photoCount: selectedPhotoCount,
+                        backgroundKey: defaultBackgroundKey,
+                        photoCount: defaultPhotoCount,
                       ),
                     );
                   },
@@ -634,37 +604,6 @@ class _CaptureSessionOptions {
   final int countdownSeconds;
   final String backgroundKey;
   final int photoCount;
-}
-
-class _LayoutChoice {
-  const _LayoutChoice({
-    required this.key,
-    required this.label,
-    required this.description,
-  });
-
-  final String key;
-  final String label;
-  final String description;
-}
-
-int _photoCountForBackground(String backgroundKey, {int fallback = 3}) {
-  switch (backgroundKey) {
-    case 'portrait1':
-      return 1;
-    case 'portrait2':
-      return 2;
-    case 'portrait3':
-      return 3;
-    case 'landscape4':
-      return 4;
-    case 'landscape6':
-      return 6;
-    case 'portrait6':
-      return 6;
-    default:
-      return fallback;
-  }
 }
 
 enum _CapturePreviewAction {

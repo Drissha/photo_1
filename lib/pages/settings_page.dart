@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/models/app_settings.dart';
 import '../core/services/app_providers.dart';
 import '../core/services/camera_manager_service.dart';
+import '../core/services/dashboard_api_service.dart';
 import '../core/services/local_camera_preview_service.dart';
 import '../core/services/storage_service.dart';
 
@@ -19,6 +20,7 @@ class _SettingsPageState extends State<SettingsPage> {
   late AppSettings _settings;
   late final TextEditingController _commandPortController;
   late final TextEditingController _remoteCmdController;
+  bool _isSyncingData = false;
 
   @override
   void initState() {
@@ -71,6 +73,33 @@ class _SettingsPageState extends State<SettingsPage> {
     );
     context.read<CameraManagerService>().updateConnectionSettings(nextSettings);
     await _saveSettings(nextSettings);
+  }
+
+  Future<void> _syncBackgroundData() async {
+    if (_isSyncingData) return;
+
+    setState(() => _isSyncingData = true);
+    try {
+      final api = context.read<ApiController>();
+      final downloaded = await api.syncBackgrounds();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sync selesai. $downloaded background disimpan ke folder background lokal.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Sync background gagal: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSyncingData = false);
+      }
+    }
   }
 
   int _parsePort(String input, int fallback) {
@@ -129,22 +158,29 @@ class _SettingsPageState extends State<SettingsPage> {
         title: const Text('Settings'),
       ),
       body: SafeArea(
-        minimum: const EdgeInsets.all(40),
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: ListView(
-            children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 980),
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+              children: [
+                _buildPageHeader(context),
+                const SizedBox(height: 20),
+                _buildSectionCard(
+                  context,
+                  icon: Icons.palette_outlined,
+                  title: 'Appearance',
+                  subtitle: 'Atur tema aplikasi.',
                   children: [
-                    Text('Theme', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 12),
-                    DropdownButton<ThemeMode>(
+                    DropdownButtonFormField<ThemeMode>(
                       value: _settings.themeMode,
-                      items: ThemeMode.values.map((mode) => DropdownMenuItem(value: mode, child: Text(mode.name))).toList(),
+                      decoration: const InputDecoration(
+                        labelText: 'Theme',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: ThemeMode.values
+                          .map((mode) => DropdownMenuItem(value: mode, child: Text(mode.name)))
+                          .toList(),
                       onChanged: (value) {
                         if (value == null) return;
                         _saveSettings(_settings.copyWith(themeMode: value));
@@ -152,22 +188,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context,
+                  icon: Icons.photo_camera_front_outlined,
+                  title: 'Webcam Live View',
+                  subtitle: 'Webcam hanya dipakai untuk preview live view.',
                   children: [
-                    Text('Webcam Live View', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Webcam ini dipakai hanya untuk live view. Capture tetap memakai kamera DigiCamControl.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 12),
                     if (localPreview.isInitializing)
                       const LinearProgressIndicator()
                     else if (localPreview.availableCameras.isEmpty)
@@ -199,21 +226,17 @@ class _SettingsPageState extends State<SettingsPage> {
                         },
                       ),
                     const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: FilledButton.tonalIcon(
-                        onPressed: () async {
-                          await localPreview.refreshCameras();
-                        },
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Refresh Webcam'),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
                     Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
+                      spacing: 12,
+                      runSpacing: 12,
                       children: [
+                        FilledButton.tonalIcon(
+                          onPressed: () async {
+                            await localPreview.refreshCameras();
+                          },
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Refresh Webcam'),
+                        ),
                         _buildInfoChip('Status', localPreview.status),
                         _buildInfoChip('Enabled', localPreview.isEnabled ? 'Yes' : 'No'),
                         _buildInfoChip('Detected', localPreview.availableCameras.length.toString()),
@@ -221,52 +244,73 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context,
+                  icon: Icons.folder_open_outlined,
+                  title: 'Storage',
+                  subtitle: 'Tentukan folder simpan dan sinkronisasi background.',
                   children: [
-                    Text('Storage', style: Theme.of(context).textTheme.titleMedium),
+                    _buildInfoRow(
+                      context,
+                      label: 'Save folder',
+                      value: _settings.saveFolderPath,
+                    ),
                     const SizedBox(height: 12),
-                    Text('Save Folder: ${_settings.saveFolderPath}'),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      onPressed: () async {
-                        final selectedFolder = await context.read<StorageService>().pickSaveFolder();
-                        if (selectedFolder != null) {
-                          await _saveSettings(_settings.copyWith(saveFolderPath: selectedFolder));
-                        }
-                      },
-                      icon: const Icon(Icons.folder_open),
-                      label: const Text('Browse Folder'),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () async {
+                            final selectedFolder = await context.read<StorageService>().pickSaveFolder();
+                            if (selectedFolder != null) {
+                              await _saveSettings(_settings.copyWith(saveFolderPath: selectedFolder));
+                            }
+                          },
+                          icon: const Icon(Icons.folder_open),
+                          label: const Text('Browse Folder'),
+                        ),
+                        FilledButton.tonalIcon(
+                          onPressed: _isSyncingData ? null : _syncBackgroundData,
+                          icon: _isSyncingData
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.sync),
+                          label: Text(_isSyncingData ? 'Syncing...' : 'Sync Data'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Download background dari API lalu simpan ke folder background lokal agar bisa dipakai di edit page.',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                 ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context,
+                  icon: Icons.usb_outlined,
+                  title: 'DigiCamControl',
+                  subtitle: 'Pengaturan koneksi kamera dan capture.',
                   children: [
-                    Text('DigiCamControl', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Capture memakai DigiCamControl. Live view memakai webcam lokal yang bisa dipilih terpisah.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 12),
                     TextFormField(
                       controller: _commandPortController,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
                         labelText: 'Control / Capture Port',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _remoteCmdController,
+                      decoration: const InputDecoration(
+                        labelText: 'CameraControlRemoteCmd.exe Path',
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -283,34 +327,21 @@ class _SettingsPageState extends State<SettingsPage> {
                     const SizedBox(height: 8),
                     Align(
                       alignment: Alignment.centerLeft,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await context.read<LocalCameraPreviewService>().refreshCameras();
-                        },
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Refresh Webcam'),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _remoteCmdController,
-                      decoration: const InputDecoration(
-                        labelText: 'CameraControlRemoteCmd.exe Path',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Align(
-                      alignment: Alignment.centerLeft,
                       child: FilledButton.icon(
                         onPressed: _saveConnectionSettings,
                         icon: const Icon(Icons.save_outlined),
                         label: const Text('Save Connection'),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Text('Camera', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 12),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context,
+                  icon: Icons.camera_alt_outlined,
+                  title: 'Capture',
+                  subtitle: 'Atur kamera utama dan perilaku auto capture.',
+                  children: [
                     DropdownButtonFormField<String>(
                       initialValue: captureCameraValue,
                       isExpanded: true,
@@ -335,11 +366,17 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                     const SizedBox(height: 12),
                     SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
                       title: const Text('Auto Start Camera'),
                       value: _settings.autoStartCamera,
                       onChanged: (value) {
                         _saveSettings(_settings.copyWith(autoStartCamera: value));
                       },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Auto Capture Delay: ${_settings.autoCaptureDelaySeconds} detik',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     Slider(
                       value: _settings.autoCaptureDelaySeconds.toDouble(),
@@ -352,13 +389,10 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                     ),
                     const SizedBox(height: 8),
-                    Text('Preview Duration', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
                     Text(
-                      'How long each photo preview stays on screen before auto-continue.',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      'Preview Duration: ${_settings.capturePreviewDurationSeconds} detik',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    const SizedBox(height: 12),
                     Slider(
                       value: _settings.capturePreviewDurationSeconds.toDouble(),
                       min: 1,
@@ -371,14 +405,15 @@ class _SettingsPageState extends State<SettingsPage> {
                         );
                       },
                     ),
-                    const SizedBox(height: 20),
-                    Text('Camera Profile', style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Perubahan berikut akan dikirim ke DigiCamControl saat kamera aktif.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 12),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildSectionCard(
+                  context,
+                  icon: Icons.tune_outlined,
+                  title: 'Camera Profile',
+                  subtitle: 'Perubahan di bawah dikirim ke DigiCamControl.',
+                  children: [
                     _buildCameraSlider(
                       label: 'Brightness',
                       value: _settings.cameraBrightness,
@@ -509,7 +544,9 @@ class _SettingsPageState extends State<SettingsPage> {
                         );
                       },
                     ),
+                    const SizedBox(height: 8),
                     SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
                       title: const Text('Mirror'),
                       value: _settings.cameraMirror,
                       onChanged: (value) {
@@ -520,6 +557,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                     ),
                     SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
                       title: const Text('Flip Horizontal'),
                       value: _settings.cameraFlipHorizontal,
                       onChanged: (value) {
@@ -530,6 +568,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                     ),
                     SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
                       title: const Text('Flip Vertical'),
                       value: _settings.cameraFlipVertical,
                       onChanged: (value) {
@@ -541,11 +580,109 @@ class _SettingsPageState extends State<SettingsPage> {
                     ),
                   ],
                 ),
-              ),
+              ],
             ),
-            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPageHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.3)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Settings',
+              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Atur kamera, penyimpanan, sinkronisasi background, dan preferensi capture dari satu tempat.',
+              style: theme.textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionCard(
+    BuildContext context, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required List<Widget> children,
+  }) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(subtitle, style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            for (var i = 0; i < children.length; i++) ...[
+              children[i],
+              if (i != children.length - 1) const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(BuildContext context, {required String label, required String value}) {
+    final theme = Theme.of(context);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.45),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: theme.textTheme.labelMedium),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: theme.textTheme.bodyMedium,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

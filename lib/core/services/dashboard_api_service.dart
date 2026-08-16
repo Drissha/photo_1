@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -12,11 +11,15 @@ class RemoteTemplateRecord {
     required this.raw,
     required this.id,
     required this.name,
+    required this.photoCount,
+    required this.layoutMode,
   });
 
   final Map<String, dynamic> raw;
   final String? id;
   final String name;
+  final int? photoCount;
+  final String? layoutMode;
 }
 
 class RemoteBackgroundRecord {
@@ -104,6 +107,11 @@ class ApiController {
                 : item['layoutId']?.toString().trim().isNotEmpty == true
                     ? item['layoutId'].toString()
                     : 'Template',
+            photoCount: _readPhotoCount(item['photoCount']) ??
+                _readPhotoCount(item['data'] is Map ? (item['data'] as Map)['photoCount'] : null) ??
+                _readPhotoCount(item['data'] is Map ? (item['data'] as Map)['shots'] : null),
+            layoutMode: _readLayoutMode(item['layoutMode']) ??
+                _readLayoutMode(item['data'] is Map ? (item['data'] as Map)['layoutMode'] : null),
           ),
         )
         .toList();
@@ -140,6 +148,11 @@ class ApiController {
                   : item['layoutId']?.toString().trim().isNotEmpty == true
                       ? item['layoutId'].toString()
                       : 'Template',
+              photoCount: _readPhotoCount(item['photoCount']) ??
+                  _readPhotoCount(item['data'] is Map ? (item['data'] as Map)['photoCount'] : null) ??
+                  _readPhotoCount(item['data'] is Map ? (item['data'] as Map)['shots'] : null),
+              layoutMode: _readLayoutMode(item['layoutMode']) ??
+                  _readLayoutMode(item['data'] is Map ? (item['data'] as Map)['layoutMode'] : null),
             ),
           )
           .toList();
@@ -304,7 +317,7 @@ class ApiController {
     required String layoutId,
     required String name,
     required int photoCount,
-    required String orientation,
+    required String layoutMode,
     required String accentColor,
   }) async {
     return createTemplate(
@@ -312,12 +325,24 @@ class ApiController {
       data: {
         'layoutId': layoutId,
         'photoCount': photoCount,
-        'orientation': orientation,
+        'layoutMode': layoutMode,
+        'orientation': layoutMode,
         'accentColor': accentColor,
         'source': 'photobooth-layout-selection',
         'syncedAt': DateTime.now().toIso8601String(),
       },
     );
+  }
+
+  int? _readPhotoCount(dynamic value) {
+    if (value == null) return null;
+    return int.tryParse(value.toString());
+  }
+
+  String? _readLayoutMode(dynamic value) {
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return text.toLowerCase();
   }
 
   Future<int> pendingUploadCount() async {

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -19,12 +20,14 @@ class EditPage extends StatefulWidget {
     required this.takeFolderPath,
     required this.takeFolderName,
     required this.initialBackgroundKey,
+    this.layoutTemplateData,
   });
 
   final List<String> photoPaths;
   final String takeFolderPath;
   final String takeFolderName;
   final String initialBackgroundKey;
+  final Map<String, dynamic>? layoutTemplateData;
 
   @override
   State<EditPage> createState() => _EditPageState();
@@ -42,6 +45,7 @@ class _EditPageState extends State<EditPage> {
   ui.Image? _previewImage;
   int _previewRenderToken = 0;
   Timer? _previewRefreshTimer;
+  late final _TemplateLayoutSpec? _apiTemplateLayoutSpec;
   _EditLayout _selectedLayout = _EditLayout.grid;
   _ColorTone _selectedTone = _ColorTone.natural;
   final Map<BackgroundCategory, List<File>> _backgroundImagesByCategory = {
@@ -59,7 +63,8 @@ class _EditPageState extends State<EditPage> {
   void initState() {
     super.initState();
     // Layout dan transform awal disiapkan sebelum background serta preview dimuat.
-    _selectedLayout = _layoutFromKey(widget.initialBackgroundKey);
+    _apiTemplateLayoutSpec = _TemplateLayoutSpec.fromJson(widget.layoutTemplateData);
+    _selectedLayout = _layoutFromMode(widget.initialBackgroundKey, widget.photoPaths.length);
     _syncPhotoTransforms(widget.photoPaths.length);
     _previewScrollController = ScrollController();
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -575,17 +580,32 @@ try {
     //   maxWidth: spec.width - 180,
     // );
 
-    final slotRects = _wantedPosterPhotoRects(spec);
-    for (var index = 0; index < slotRects.length; index++) {
-      final rect = slotRects[index];
-      final photo = photos.length > index ? photos[index] : null;
-      _paintWantedPosterFrame(
-        canvas,
-        rect,
-        photo,
-        tonePaint,
-        caption: 'PHOTO ${index + 1} - ${_wantedPosterCaptionForIndex(index)}',
-      );
+    final slotPlacements = _templateSlotPlacements(spec);
+    if (slotPlacements.isNotEmpty) {
+      for (var index = 0; index < slotPlacements.length; index++) {
+        final placement = slotPlacements[index];
+        final photo = photos.length > index ? photos[index] : null;
+        _paintWantedPosterFrame(
+          canvas,
+          placement.rect,
+          photo,
+          tonePaint,
+          caption: 'PHOTO ${index + 1} - ${placement.caption ?? _wantedPosterCaptionForIndex(index)}',
+        );
+      }
+    } else {
+      final slotRects = _wantedPosterPhotoRects(spec);
+      for (var index = 0; index < slotRects.length; index++) {
+        final rect = slotRects[index];
+        final photo = photos.length > index ? photos[index] : null;
+        _paintWantedPosterFrame(
+          canvas,
+          rect,
+          photo,
+          tonePaint,
+          caption: 'PHOTO ${index + 1} - ${_wantedPosterCaptionForIndex(index)}',
+        );
+      }
     }
 
     _drawText(
@@ -724,17 +744,32 @@ try {
       maxWidth: spec.width - 120,
     );
 
-    final slotRects = _landscapePosterPhotoRects(spec);
-    for (var index = 0; index < slotRects.length; index++) {
-      final rect = slotRects[index];
-      final photo = photos.length > index ? photos[index] : null;
-      _paintWantedPosterFrame(
-        canvas,
-        rect,
-        photo,
-        tonePaint,
-        caption: 'PHOTO ${index + 1} - ${_landscapePosterCaptionForIndex(index)}',
-      );
+    final slotPlacements = _templateSlotPlacements(spec);
+    if (slotPlacements.isNotEmpty) {
+      for (var index = 0; index < slotPlacements.length; index++) {
+        final placement = slotPlacements[index];
+        final photo = photos.length > index ? photos[index] : null;
+        _paintWantedPosterFrame(
+          canvas,
+          placement.rect,
+          photo,
+          tonePaint,
+          caption: 'PHOTO ${index + 1} - ${placement.caption ?? _landscapePosterCaptionForIndex(index)}',
+        );
+      }
+    } else {
+      final slotRects = _landscapePosterPhotoRects(spec);
+      for (var index = 0; index < slotRects.length; index++) {
+        final rect = slotRects[index];
+        final photo = photos.length > index ? photos[index] : null;
+        _paintWantedPosterFrame(
+          canvas,
+          rect,
+          photo,
+          tonePaint,
+          caption: 'PHOTO ${index + 1} - ${_landscapePosterCaptionForIndex(index)}',
+        );
+      }
     }
 
     _drawText(
@@ -781,15 +816,22 @@ try {
   }
 
   List<Rect> _wantedPosterPhotoRects(_LayoutExportSpec spec) {
+    final templateRects = _templateSlotRects(spec);
+    if (templateRects.isNotEmpty) {
+      return templateRects;
+    }
+
     final count = widget.photoPaths.length;
     final builders = _wantedPosterSlotBuilders[count] ?? _wantedPosterSlotBuilders[6]!;
-    return builders
-        .take(count)
-        .map((buildRect) => buildRect(spec))
-        .toList(growable: false);
+    return builders.take(count).map((buildRect) => buildRect(spec)).toList(growable: false);
   }
 
   List<Rect> _landscapePosterPhotoRects(_LayoutExportSpec spec) {
+    final templateRects = _templateSlotRects(spec);
+    if (templateRects.isNotEmpty) {
+      return templateRects;
+    }
+
     final count = widget.photoPaths.length;
     final paperLeft = 88.0;
     final top = 150.0;
@@ -827,6 +869,30 @@ try {
       );
       }
     });
+  }
+
+  List<_TemplateSlotPlacement> _templateSlotPlacements(_LayoutExportSpec spec) {
+    final template = _apiTemplateLayoutSpec;
+    if (template == null) return const [];
+    return template.slotsFor(widget.photoPaths.length, _selectedLayout).map((slot) {
+      return _TemplateSlotPlacement(
+        rect: slot.toRect(
+          templatePageWidth: template.pageWidth,
+          templatePageHeight: template.pageHeight,
+          targetWidth: spec.width.toDouble(),
+          targetHeight: spec.height.toDouble(),
+        ),
+        caption: slot.caption,
+      );
+    }).toList(growable: false);
+  }
+
+  List<Rect> _templateSlotRects(_LayoutExportSpec spec) {
+    return _templateSlotPlacements(spec).map((slot) => slot.rect).toList(growable: false);
+  }
+
+  List<_TemplateSlotPlacement> _wantedPosterPreviewPlacements(_LayoutExportSpec spec) {
+    return _templateSlotPlacements(spec);
   }
 
   static const List<String> _wantedPosterCaptions = [
@@ -1126,8 +1192,24 @@ try {
     painter.paint(canvas, offset);
   }
 
-  _EditLayout _layoutFromKey(String key) {
-    switch (key) {
+  _EditLayout _layoutFromMode(String value, int photoCount) {
+    final normalized = value.toLowerCase().trim().replaceAll(RegExp(r'[\s_-]+'), '');
+
+    switch (normalized) {
+      case 'grid':
+        return _EditLayout.grid;
+      case 'verticalstrip':
+        return _EditLayout.verticalStrip;
+      case 'horizontalstrip':
+        return _EditLayout.horizontalStrip;
+      case 'polaroid':
+        return _EditLayout.polaroid;
+      case 'wanted':
+      case 'wantedposter':
+        return _EditLayout.wantedPoster;
+      case 'landscape':
+      case 'landscapeposter':
+        return _EditLayout.landscapePoster;
       case 'portrait1':
       case 'portrait2':
       case 'portrait3':
@@ -1136,13 +1218,14 @@ try {
       case 'landscape4':
       case 'landscape6':
         return _EditLayout.landscapePoster;
-      case 'wanted1':
-      case 'wanted2':
-      case 'wanted3':
-      case 'wanted4':
-      case 'wanted6':
-        return _EditLayout.wantedPoster;
       default:
+        if (normalized.contains('grid')) return _EditLayout.grid;
+        if (normalized.contains('verticalstrip')) return _EditLayout.verticalStrip;
+        if (normalized.contains('horizontalstrip')) return _EditLayout.horizontalStrip;
+        if (normalized.contains('polaroid')) return _EditLayout.polaroid;
+        if (normalized.contains('landscape')) return _EditLayout.landscapePoster;
+        if (normalized.contains('wanted')) return _EditLayout.wantedPoster;
+        if (photoCount >= 4) return _EditLayout.wantedPoster;
         return _EditLayout.wantedPoster;
     }
   }
@@ -2051,24 +2134,7 @@ try {
                   //     ),
                   //   ),
                   // ),
-                  _buildWantedPosterPreviewFrame(
-                    context: context,
-                    top: 320,
-                    caption: 'PHOTO 1 - CAUGHT ON TAPE',
-                    index: 0,
-                  ),
-                  _buildWantedPosterPreviewFrame(
-                    context: context,
-                    top: 564,
-                    caption: 'PHOTO 2 - LAST KNOWN APPEARANCE',
-                    index: 1,
-                  ),
-                  _buildWantedPosterPreviewFrame(
-                    context: context,
-                    top: 808,
-                    caption: 'PHOTO 3 - IDENTIFY THIS SUSPECT',
-                    index: 2,
-                  ),
+                  ..._buildWantedPreviewFrames(),
                   Positioned(
                     left: 100,
                     right: 100,
@@ -2260,8 +2326,106 @@ try {
     );
   }
 
+  Widget _buildWantedPosterPreviewFrame({
+    required BuildContext context,
+    required Rect rect,
+    required String caption,
+    required int index,
+  }) {
+    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
+    final cacheWidth = (rect.width * devicePixelRatio).round();
+    final cacheHeight = (rect.height * devicePixelRatio).round();
+
+    return Positioned(
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height + 28,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            top: 28,
+            left: 0,
+            right: 0,
+            child: Container(
+              height: rect.height,
+              decoration: BoxDecoration(
+                color: const Color(0xFF111111),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.22),
+                    blurRadius: 10,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(14),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F0E4),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: index < widget.photoPaths.length
+                    ? Image.file(
+                        File(widget.photoPaths[index]),
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.low,
+                        cacheWidth: cacheWidth > 0 ? cacheWidth : null,
+                        cacheHeight: cacheHeight > 0 ? cacheHeight : null,
+                      )
+                    : Container(
+                        color: const Color(0xFF1C1C1C),
+                      ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            left: 6,
+            child: Text(
+              caption,
+              style: const TextStyle(
+                color: Color(0xFF111111),
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildWantedPreviewFrames() {
+    final placements = _wantedPosterPreviewPlacements(
+      const _LayoutExportSpec(
+        width: 1200,
+        height: 1800,
+        margin: 20,
+        headerHeight: 90,
+        footerHeight: 100,
+        innerPadding: 8,
+        gap: 34,
+      ),
+    );
+
+    return List.generate(placements.length, (index) {
+      final placement = placements[index];
+      return _buildWantedPosterPreviewFrame(
+        context: context,
+        rect: placement.rect,
+        caption: 'PHOTO ${index + 1} - ${placement.caption ?? _wantedPosterCaptionForIndex(index)}',
+        index: index,
+      );
+    });
+  }
+
   List<Widget> _buildLandscapePreviewFrames() {
-    final rects = _landscapePosterPhotoRects(
+    final placements = _templateSlotPlacements(
       const _LayoutExportSpec(
         width: 1800,
         height: 1200,
@@ -2273,8 +2437,23 @@ try {
       ),
     );
 
+    final rects = placements.isNotEmpty
+        ? placements
+        : _landscapePosterPhotoRects(
+            const _LayoutExportSpec(
+              width: 1800,
+              height: 1200,
+              margin: 20,
+              headerHeight: 145,
+              footerHeight: 120,
+              innerPadding: 8,
+              gap: 24,
+            ),
+          ).map((rect) => _TemplateSlotPlacement(rect: rect, caption: null)).toList(growable: false);
+
     return List.generate(rects.length, (index) {
-      final rect = rects[index];
+      final placement = rects[index];
+      final rect = placement.rect;
       final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
       final cacheWidth = (rect.width * devicePixelRatio).round();
       final cacheHeight = (rect.height * devicePixelRatio).round();
@@ -2326,7 +2505,7 @@ try {
               top: 0,
               left: 6,
               child: Text(
-                'PHOTO ${index + 1} - ${_landscapePosterCaptionForIndex(index)}',
+                'PHOTO ${index + 1} - ${placement.caption ?? _landscapePosterCaptionForIndex(index)}',
                 style: const TextStyle(
                   color: Color(0xFF111111),
                   fontSize: 16,
@@ -2339,84 +2518,6 @@ try {
         ),
       );
     });
-  }
-
-  Widget _buildWantedPosterPreviewFrame({
-    required BuildContext context,
-    required double top,
-    required String caption,
-    required int index,
-  }) {
-    final rectTop = top;
-    final rectLeft = 116.0;
-    const rectWidth = 968.0;
-    const rectHeight = 204.0;
-    final devicePixelRatio = MediaQuery.of(context).devicePixelRatio;
-    final cacheWidth = (rectWidth * devicePixelRatio).round();
-    final cacheHeight = (rectHeight * devicePixelRatio).round();
-
-    return Positioned(
-      left: rectLeft,
-      top: rectTop,
-      width: rectWidth,
-      height: rectHeight + 28,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            top: 28,
-            left: 0,
-            right: 0,
-            child: Container(
-              height: rectHeight,
-              decoration: BoxDecoration(
-                color: const Color(0xFF111111),
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.22),
-                    blurRadius: 10,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(14),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F0E4),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: index < widget.photoPaths.length
-                    ? Image.file(
-                        File(widget.photoPaths[index]),
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.low,
-                        cacheWidth: cacheWidth > 0 ? cacheWidth : null,
-                        cacheHeight: cacheHeight > 0 ? cacheHeight : null,
-                      )
-                    : Container(
-                        color: const Color(0xFF1C1C1C),
-                      ),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            left: 6,
-            child: Text(
-              caption,
-              style: const TextStyle(
-                color: Color(0xFF111111),
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   Widget _buildPhotoFrame({
@@ -2720,6 +2821,192 @@ try {
       ),
     );
   }
+}
+
+class _TemplateLayoutSpec {
+  const _TemplateLayoutSpec({
+    required this.pageWidth,
+    required this.pageHeight,
+    required this.directSlots,
+    required this.variants,
+  });
+
+  final double pageWidth;
+  final double pageHeight;
+  final List<_TemplateSlotSpec> directSlots;
+  final Map<int, List<_TemplateSlotSpec>> variants;
+
+  factory _TemplateLayoutSpec.fromJson(Map<String, dynamic>? raw) {
+    if (raw == null || raw.isEmpty) {
+      return const _TemplateLayoutSpec(
+        pageWidth: 0,
+        pageHeight: 0,
+        directSlots: [],
+        variants: {},
+      );
+    }
+
+    final nested = raw['data'];
+    final nestedMap = _decodeNestedMap(nested);
+
+    final pageWidth = _toDouble(raw['width']) != 0
+        ? _toDouble(raw['width'])
+        : _toDouble(nestedMap['design'] is Map ? (nestedMap['design'] as Map)['width'] : null) != 0
+            ? _toDouble(nestedMap['design'] is Map ? (nestedMap['design'] as Map)['width'] : null)
+            : _toDouble((raw['page'] is Map) ? (raw['page'] as Map)['width'] : null);
+    final pageHeight = _toDouble(raw['height']) != 0
+        ? _toDouble(raw['height'])
+        : _toDouble(nestedMap['design'] is Map ? (nestedMap['design'] as Map)['height'] : null) != 0
+            ? _toDouble(nestedMap['design'] is Map ? (nestedMap['design'] as Map)['height'] : null)
+            : _toDouble((raw['page'] is Map) ? (raw['page'] as Map)['height'] : null);
+    final directSlots = _parseSlots(raw['slots'])
+        .followedBy(_parseSlots(nestedMap['slots']))
+        .followedBy(_parseObjects(nestedMap['objects']))
+        .toList(growable: false);
+    final variants = <int, List<_TemplateSlotSpec>>{};
+    final variantsRaw = raw['variants'] ?? nestedMap['variants'];
+    if (variantsRaw is Map) {
+      for (final entry in variantsRaw.entries) {
+        final key = int.tryParse(entry.key.toString());
+        if (key == null) continue;
+        variants[key] = _parseSlots(entry.value);
+      }
+    }
+
+    return _TemplateLayoutSpec(
+      pageWidth: pageWidth,
+      pageHeight: pageHeight,
+      directSlots: directSlots,
+      variants: variants,
+    );
+  }
+
+  List<_TemplateSlotSpec> slotsFor(int photoCount, _EditLayout layout) {
+    final countSlots = variants[photoCount];
+    if (countSlots != null && countSlots.isNotEmpty) {
+      return countSlots;
+    }
+
+    if (directSlots.isNotEmpty) {
+      return directSlots;
+    }
+
+    final fallbackCount = switch (layout) {
+      _EditLayout.landscapePoster => photoCount >= 6 ? 6 : 4,
+      _EditLayout.wantedPoster => photoCount >= 6 ? 6 : photoCount <= 2 ? 2 : 3,
+      _EditLayout.grid => photoCount,
+      _EditLayout.verticalStrip => photoCount,
+      _EditLayout.horizontalStrip => photoCount,
+      _EditLayout.polaroid => photoCount,
+    };
+    return variants[fallbackCount] ?? const [];
+  }
+
+  static List<_TemplateSlotSpec> _parseSlots(dynamic value) {
+    if (value is List) {
+      return value.whereType<Map>().map((item) => _TemplateSlotSpec.fromJson(item.cast<String, dynamic>())).toList();
+    }
+    if (value is Map && value['slots'] is List) {
+      return (value['slots'] as List)
+          .whereType<Map>()
+          .map((item) => _TemplateSlotSpec.fromJson(item.cast<String, dynamic>()))
+          .toList();
+    }
+    return const [];
+  }
+
+  static List<_TemplateSlotSpec> _parseObjects(dynamic value) {
+    if (value is! List) return const [];
+    return value
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .where((item) => item['type']?.toString().toLowerCase() == 'photo')
+        .map(_TemplateSlotSpec.fromObjectJson)
+        .toList(growable: false);
+  }
+
+  static Map<String, dynamic> _decodeNestedMap(dynamic value) {
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return value.cast<String, dynamic>();
+    }
+    if (value is String && value.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(value);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+        if (decoded is Map) {
+          return decoded.cast<String, dynamic>();
+        }
+      } catch (_) {}
+    }
+    return const <String, dynamic>{};
+  }
+
+  static double _toDouble(dynamic value) {
+    if (value == null) return 0;
+    return double.tryParse(value.toString()) ?? 0;
+  }
+}
+
+class _TemplateSlotSpec {
+  const _TemplateSlotSpec({
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+    required this.caption,
+  });
+
+  final double x;
+  final double y;
+  final double width;
+  final double height;
+  final String? caption;
+
+  factory _TemplateSlotSpec.fromJson(Map<String, dynamic> json) {
+    return _TemplateSlotSpec(
+      x: _TemplateLayoutSpec._toDouble(json['x']),
+      y: _TemplateLayoutSpec._toDouble(json['y']),
+      width: _TemplateLayoutSpec._toDouble(json['width']),
+      height: _TemplateLayoutSpec._toDouble(json['height']),
+      caption: json['caption']?.toString().trim().isNotEmpty == true ? json['caption'].toString() : null,
+    );
+  }
+
+  factory _TemplateSlotSpec.fromObjectJson(Map<String, dynamic> json) {
+    return _TemplateSlotSpec(
+      x: _TemplateLayoutSpec._toDouble(json['x']),
+      y: _TemplateLayoutSpec._toDouble(json['y']),
+      width: _TemplateLayoutSpec._toDouble(json['width']),
+      height: _TemplateLayoutSpec._toDouble(json['height']),
+      caption: json['caption']?.toString().trim().isNotEmpty == true ? json['caption'].toString() : null,
+    );
+  }
+
+  Rect toRect({
+    required double templatePageWidth,
+    required double templatePageHeight,
+    required double targetWidth,
+    required double targetHeight,
+  }) {
+    final scaleX = templatePageWidth > 0 ? targetWidth / templatePageWidth : 1.0;
+    final scaleY = templatePageHeight > 0 ? targetHeight / templatePageHeight : 1.0;
+    return Rect.fromLTWH(x * scaleX, y * scaleY, width * scaleX, height * scaleY);
+  }
+}
+
+class _TemplateSlotPlacement {
+  const _TemplateSlotPlacement({
+    required this.rect,
+    required this.caption,
+  });
+
+  final Rect rect;
+  final String? caption;
 }
 
 class _LayoutExportSpec {

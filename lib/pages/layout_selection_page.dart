@@ -14,11 +14,13 @@ class LayoutSelectionPage extends StatefulWidget {
     required this.packageName,
     required this.photoCount,
     required this.initialBackgroundKey,
+    this.layoutTemplateData,
   });
 
   final String packageName;
   final int photoCount;
   final String initialBackgroundKey;
+  final Map<String, dynamic>? layoutTemplateData;
 
   @override
   State<LayoutSelectionPage> createState() => _LayoutSelectionPageState();
@@ -39,6 +41,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
       id: 'portrait1',
       title: 'Portrait 1 Take',
       subtitle: '1 foto, tampilan poster portrait yang tegas.',
+      layoutMode: 'wantedPoster',
       photoCount: 1,
       orientation: _LayoutOrientation.portrait,
       accentColor: Color(0xFFFFC857),
@@ -48,6 +51,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
       id: 'portrait2',
       title: 'Portrait 2 Take',
       subtitle: '2 foto bertumpuk untuk komposisi yang rapi.',
+      layoutMode: 'wantedPoster',
       photoCount: 2,
       orientation: _LayoutOrientation.portrait,
       accentColor: Color(0xFF7AE582),
@@ -57,6 +61,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
       id: 'portrait3',
       title: 'Portrait 3 Take',
       subtitle: '3 foto dengan ritme visual yang seimbang.',
+      layoutMode: 'wantedPoster',
       photoCount: 3,
       orientation: _LayoutOrientation.portrait,
       accentColor: Color(0xFF7BDFF2),
@@ -66,6 +71,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
       id: 'landscape4',
       title: 'Landscape 4 Take',
       subtitle: 'Layout lebar 4 foto, cocok untuk grup.',
+      layoutMode: 'landscapePoster',
       photoCount: 4,
       orientation: _LayoutOrientation.landscape,
       accentColor: Color(0xFFF4B942),
@@ -75,6 +81,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
       id: 'landscape6',
       title: 'Landscape 6 Take',
       subtitle: '6 foto dalam grid landscape yang padat.',
+      layoutMode: 'landscapePoster',
       photoCount: 6,
       orientation: _LayoutOrientation.landscape,
       accentColor: Color(0xFFFF8A5B),
@@ -84,6 +91,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
       id: 'portrait6',
       title: 'Portrait 6 Take',
       subtitle: '6 foto portrait dengan susunan vertikal.',
+      layoutMode: 'wantedPoster',
       photoCount: 6,
       orientation: _LayoutOrientation.portrait,
       accentColor: Color(0xFFE58AF7),
@@ -98,8 +106,31 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
     _selectedLayoutId = widget.initialBackgroundKey;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncFullscreenState();
+      _loadCachedLayouts();
       _loadLayoutsFromApi();
     });
+  }
+
+  Future<void> _loadCachedLayouts() async {
+    try {
+      final api = context.read<ApiController>();
+      final cachedTemplates = await api.loadCachedTemplates();
+      if (!mounted || cachedTemplates.isEmpty) return;
+
+      final cachedLayouts = cachedTemplates.map(_layoutFromTemplate).whereType<_LayoutOption>().toList();
+      if (cachedLayouts.isEmpty) return;
+
+      setState(() {
+        _layouts = cachedLayouts;
+        if (!_layouts.any((layout) => layout.id == _selectedLayoutId)) {
+          _selectedLayoutId = _layouts.first.id;
+        }
+        _remoteTemplateCount = cachedLayouts.length;
+        _lastSyncMessage = 'Layout cache lokal siap dipakai offline';
+      });
+    } catch (_) {
+      // Kalau cache gagal dibaca, layout default tetap dipakai.
+    }
   }
 
   Future<void> _loadLayoutsFromApi() async {
@@ -177,7 +208,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
         layoutId: _selectedLayout.id,
         name: _selectedLayout.title,
         photoCount: _selectedLayout.photoCount,
-        orientation: _selectedLayout.orientation.label,
+        layoutMode: _selectedLayout.layoutMode,
         accentColor: '#${_selectedLayout.accentColor.value.toRadixString(16).padLeft(8, '0')}',
       );
 
@@ -208,6 +239,145 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
   _LayoutOption get _selectedLayout =>
       _layouts.firstWhere((layout) => layout.id == _selectedLayoutId, orElse: () => _layouts.first);
 
+  _LayoutOption? _layoutFromTemplate(RemoteTemplateRecord template) {
+    final rawData = template.raw['data'];
+    final Map<String, dynamic> data = switch (rawData) {
+      String value when value.trim().isNotEmpty => _decodeTemplateData(value),
+      Map value => value.cast<String, dynamic>(),
+      _ => const <String, dynamic>{},
+    };
+
+    final layoutId = (data['layoutId'] ?? template.id ?? template.name).toString().trim();
+    final photoCount =
+        template.photoCount ?? _readPhotoCount(data['photoCount']) ?? _readPhotoCount(data['shots']) ?? widget.photoCount;
+    final orientation = _parseLayoutMode(
+      template.layoutMode ?? data['layoutMode']?.toString() ?? data['orientation']?.toString(),
+    );
+    final accentColor =
+        _parseColor(data['accentColor']?.toString()) ?? _fallbackAccentColor(layoutId, orientation, photoCount);
+    final previewType = _previewTypeFor(photoCount, orientation);
+
+    return _LayoutOption(
+      id: layoutId.isNotEmpty ? layoutId : template.name,
+      title: template.name,
+      layoutMode: _layoutModeForTemplate(
+        template.layoutMode ?? data['layoutMode']?.toString() ?? data['orientation']?.toString(),
+        orientation,
+        photoCount,
+      ),
+      templateData: template.raw,
+      subtitle: data['description']?.toString().trim().isNotEmpty == true
+          ? data['description'].toString()
+          : '$photoCount foto, ${orientation.label} layout',
+      photoCount: photoCount,
+      orientation: orientation,
+      accentColor: accentColor,
+      previewType: previewType,
+    );
+  }
+
+  Map<String, dynamic> _decodeTemplateData(String value) {
+    try {
+      final decoded = jsonDecode(value);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      if (decoded is Map) {
+        return decoded.cast<String, dynamic>();
+      }
+    } catch (_) {}
+    return const <String, dynamic>{};
+  }
+
+  int? _readPhotoCount(dynamic value) {
+    if (value == null) return null;
+    return int.tryParse(value.toString());
+  }
+
+  _LayoutOrientation _parseLayoutMode(String? value) {
+    final normalized = value?.toLowerCase().trim();
+    if (normalized == null || normalized.isEmpty) {
+      return _LayoutOrientation.portrait;
+    }
+
+    if (normalized.contains('landscape')) {
+      return _LayoutOrientation.landscape;
+    }
+    if (normalized.contains('portrait')) {
+      return _LayoutOrientation.portrait;
+    }
+
+    return _LayoutOrientation.portrait;
+  }
+
+  String _layoutModeForTemplate(String? value, _LayoutOrientation orientation, int photoCount) {
+    final normalized = value?.toLowerCase().replaceAll(RegExp(r'[\s_-]+'), '');
+
+    switch (normalized) {
+      case 'grid':
+        return 'grid';
+      case 'verticalstrip':
+        return 'verticalStrip';
+      case 'horizontalstrip':
+        return 'horizontalStrip';
+      case 'polaroid':
+        return 'polaroid';
+      case 'wanted':
+      case 'wantedposter':
+        return 'wantedPoster';
+      case 'landscape':
+      case 'landscapeposter':
+        return 'landscapePoster';
+    }
+
+    if (orientation == _LayoutOrientation.landscape) {
+      return 'landscapePoster';
+    }
+
+    if (photoCount >= 4) {
+      return 'wantedPoster';
+    }
+
+    return 'wantedPoster';
+  }
+
+  Color? _parseColor(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    var normalized = value.trim().replaceFirst('#', '');
+    if (normalized.length == 6) {
+      normalized = 'FF$normalized';
+    }
+    final parsed = int.tryParse(normalized, radix: 16);
+    if (parsed == null) return null;
+    return Color(parsed);
+  }
+
+  Color _fallbackAccentColor(String layoutId, _LayoutOrientation orientation, int photoCount) {
+    return switch ((layoutId, orientation, photoCount)) {
+      (_, _LayoutOrientation.landscape, 4) => const Color(0xFFF4B942),
+      (_, _LayoutOrientation.landscape, 6) => const Color(0xFFFF8A5B),
+      (_, _LayoutOrientation.portrait, 1) => const Color(0xFFFFC857),
+      (_, _LayoutOrientation.portrait, 2) => const Color(0xFF7AE582),
+      (_, _LayoutOrientation.portrait, 3) => const Color(0xFF7BDFF2),
+      (_, _LayoutOrientation.portrait, 6) => const Color(0xFFE58AF7),
+      _ => const Color(0xFFFFC857),
+    };
+  }
+
+  _LayoutPreviewType _previewTypeFor(int photoCount, _LayoutOrientation orientation) {
+    if (orientation == _LayoutOrientation.landscape) {
+      return photoCount >= 6 ? _LayoutPreviewType.landscape6 : _LayoutPreviewType.landscape4;
+    }
+
+    return switch (photoCount) {
+      1 => _LayoutPreviewType.portrait1,
+      2 => _LayoutPreviewType.portrait2,
+      3 => _LayoutPreviewType.portrait3,
+      6 => _LayoutPreviewType.portrait6,
+      _ => _LayoutPreviewType.portrait3,
+    };
+  }
+
   Future<void> _startCameraSession() async {
     // Setelah layout dipilih, user diarahkan ke home page untuk mulai capture.
     await Navigator.of(context).pushReplacement(
@@ -215,7 +385,8 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
         builder: (_) => HomePage(
           packageName: _selectedLayout.title,
           photoCount: _selectedLayout.photoCount,
-          initialBackgroundKey: _selectedLayout.id,
+          initialBackgroundKey: _selectedLayout.layoutMode,
+          layoutTemplateData: _selectedLayout.templateData,
         ),
       ),
     );
@@ -674,93 +845,6 @@ class _LayoutCard extends StatelessWidget {
       ),
     );
   }
-
-  _LayoutOption? _layoutFromTemplate(RemoteTemplateRecord template) {
-    final rawData = template.raw['data'];
-    final Map<String, dynamic> data = switch (rawData) {
-      String value when value.trim().isNotEmpty => _decodeTemplateData(value),
-      Map value => value.cast<String, dynamic>(),
-      _ => const <String, dynamic>{},
-    };
-
-    final layoutId = (data['layoutId'] ?? template.id ?? template.name).toString().trim();
-    final photoCount = _readPhotoCount(data['photoCount']) ?? _readPhotoCount(data['shots']) ?? 3;
-    final orientation = _parseOrientation(data['orientation']?.toString());
-    final accentColor = _parseColor(data['accentColor']?.toString()) ?? _fallbackAccentColor(layoutId, orientation, photoCount);
-    final previewType = _previewTypeFor(photoCount, orientation);
-
-    return _LayoutOption(
-      id: layoutId.isNotEmpty ? layoutId : template.name,
-      title: template.name,
-      subtitle: data['description']?.toString().trim().isNotEmpty == true
-          ? data['description'].toString()
-          : '$photoCount foto, ${orientation.label} layout',
-      photoCount: photoCount,
-      orientation: orientation,
-      accentColor: accentColor,
-      previewType: previewType,
-    );
-  }
-
-  Map<String, dynamic> _decodeTemplateData(String value) {
-    try {
-      final decoded = jsonDecode(value);
-      if (decoded is Map<String, dynamic>) {
-        return decoded;
-      }
-      if (decoded is Map) {
-        return decoded.cast<String, dynamic>();
-      }
-    } catch (_) {}
-    return const <String, dynamic>{};
-  }
-
-  int? _readPhotoCount(dynamic value) {
-    if (value == null) return null;
-    return int.tryParse(value.toString());
-  }
-
-  _LayoutOrientation _parseOrientation(String? value) {
-    final normalized = value?.toLowerCase().trim();
-    return normalized == 'landscape' ? _LayoutOrientation.landscape : _LayoutOrientation.portrait;
-  }
-
-  Color? _parseColor(String? value) {
-    if (value == null || value.trim().isEmpty) return null;
-    var normalized = value.trim().replaceFirst('#', '');
-    if (normalized.length == 6) {
-      normalized = 'FF$normalized';
-    }
-    final parsed = int.tryParse(normalized, radix: 16);
-    if (parsed == null) return null;
-    return Color(parsed);
-  }
-
-  Color _fallbackAccentColor(String layoutId, _LayoutOrientation orientation, int photoCount) {
-    return switch ((layoutId, orientation, photoCount)) {
-      (_, _LayoutOrientation.landscape, 4) => const Color(0xFFF4B942),
-      (_, _LayoutOrientation.landscape, 6) => const Color(0xFFFF8A5B),
-      (_, _LayoutOrientation.portrait, 1) => const Color(0xFFFFC857),
-      (_, _LayoutOrientation.portrait, 2) => const Color(0xFF7AE582),
-      (_, _LayoutOrientation.portrait, 3) => const Color(0xFF7BDFF2),
-      (_, _LayoutOrientation.portrait, 6) => const Color(0xFFE58AF7),
-      _ => const Color(0xFFFFC857),
-    };
-  }
-
-  _LayoutPreviewType _previewTypeFor(int photoCount, _LayoutOrientation orientation) {
-    if (orientation == _LayoutOrientation.landscape) {
-      return photoCount >= 6 ? _LayoutPreviewType.landscape6 : _LayoutPreviewType.landscape4;
-    }
-
-    return switch (photoCount) {
-      1 => _LayoutPreviewType.portrait1,
-      2 => _LayoutPreviewType.portrait2,
-      3 => _LayoutPreviewType.portrait3,
-      6 => _LayoutPreviewType.portrait6,
-      _ => _LayoutPreviewType.portrait3,
-    };
-  }
 }
 
 class _LayoutPreview extends StatelessWidget {
@@ -988,6 +1072,8 @@ class _LayoutOption {
     required this.id,
     required this.title,
     required this.subtitle,
+    required this.layoutMode,
+    this.templateData,
     required this.photoCount,
     required this.orientation,
     required this.accentColor,
@@ -997,6 +1083,8 @@ class _LayoutOption {
   final String id;
   final String title;
   final String subtitle;
+  final String layoutMode;
+  final Map<String, dynamic>? templateData;
   final int photoCount;
   final _LayoutOrientation orientation;
   final Color accentColor;
