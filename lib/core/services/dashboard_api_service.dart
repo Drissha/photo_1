@@ -36,10 +36,39 @@ class RemoteBackgroundRecord {
   final Uri? url;
 }
 
+class RemotePhotoRecord {
+  const RemotePhotoRecord({
+    required this.raw,
+    required this.id,
+    required this.albumId,
+    required this.filename,
+    required this.originalUrl,
+    required this.mediumUrl,
+    required this.thumbnailUrl,
+    required this.width,
+    required this.height,
+    required this.createdAt,
+    required this.album,
+  });
+
+  final Map<String, dynamic> raw;
+  final String? id;
+  final String? albumId;
+  final String? filename;
+  final String? originalUrl;
+  final String? mediumUrl;
+  final String? thumbnailUrl;
+  final int? width;
+  final int? height;
+  final DateTime? createdAt;
+  final Map<String, dynamic>? album;
+}
+
 class SyncSummary {
   const SyncSummary({
     required this.templatesFetched,
     required this.backgroundsDownloaded,
+    required this.backgroundsDeleted,
     required this.uploadsUploaded,
     required this.uploadsQueued,
     required this.albumName,
@@ -47,6 +76,7 @@ class SyncSummary {
 
   final int templatesFetched;
   final int backgroundsDownloaded;
+  final int backgroundsDeleted;
   final int uploadsUploaded;
   final int uploadsQueued;
   final String? albumName;
@@ -55,6 +85,9 @@ class SyncSummary {
     final parts = <String>[];
     parts.add('template: $templatesFetched');
     parts.add('background: $backgroundsDownloaded');
+    if (backgroundsDeleted > 0) {
+      parts.add('hapus background: $backgroundsDeleted');
+    }
     parts.add('upload: $uploadsUploaded');
     if (uploadsQueued > 0) {
       parts.add('antrian: $uploadsQueued');
@@ -63,6 +96,20 @@ class SyncSummary {
       parts.add('album: $albumName');
     }
     return parts.join(' | ');
+  }
+}
+
+class BackgroundSyncSummary {
+  const BackgroundSyncSummary({
+    required this.downloaded,
+    required this.deleted,
+  });
+
+  final int downloaded;
+  final int deleted;
+
+  String get message {
+    return 'downloaded: $downloaded | deleted: $deleted';
   }
 }
 
@@ -204,9 +251,10 @@ class ApiController {
         .toList();
   }
 
-  Future<int> syncBackgrounds() async {
+  Future<BackgroundSyncSummary> syncBackgrounds() async {
     final cacheFolder = await _storageService.getApiBackgroundCacheFolder();
     final backgrounds = await fetchBackgrounds();
+    final remoteFiles = <String>{};
     var downloaded = 0;
 
     for (final background in backgrounds) {
@@ -220,6 +268,7 @@ class ApiController {
             ? background.raw['filename'].toString()
             : '${background.id ?? background.name}.png',
       );
+      remoteFiles.add(safeName.toLowerCase());
       final targetPath = p.join(cacheFolder, safeName);
       final targetFile = File(targetPath);
       try {
@@ -231,7 +280,33 @@ class ApiController {
       }
     }
 
-    return downloaded;
+    var deleted = 0;
+    final cacheDir = Directory(cacheFolder);
+    if (cacheDir.existsSync()) {
+      final supportedExtensions = ['.jpg', '.jpeg', '.png'];
+      for (final entity in cacheDir.listSync()) {
+        if (entity is! File) {
+          continue;
+        }
+        if (!supportedExtensions.contains(p.extension(entity.path).toLowerCase())) {
+          continue;
+        }
+
+        final fileName = p.basename(entity.path).toLowerCase();
+        if (remoteFiles.contains(fileName)) {
+          continue;
+        }
+
+        try {
+          await entity.delete();
+          deleted += 1;
+        } catch (_) {
+          // Kalau ada file lokal yang gagal dihapus, sync tetap lanjut.
+        }
+      }
+    }
+
+    return BackgroundSyncSummary(downloaded: downloaded, deleted: deleted);
   }
 
   Future<String?> ensureAlbumId({
@@ -255,7 +330,7 @@ class ApiController {
     return payload['id']?.toString();
   }
 
-  Future<Map<String, dynamic>> uploadPhoto({
+  Future<RemotePhotoRecord> uploadPhoto({
     required File file,
     required String albumId,
   }) async {
@@ -267,6 +342,7 @@ class ApiController {
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
     final decoded = _decodeResponseBody(response.body);
+    print('Upload response: ${response.statusCode} - ${response.body}');
     if (response.statusCode < 200 || response.statusCode >= 300 || decoded['success'] == false) {
       throw HttpException(
         decoded['error']?.toString() ?? 'Upload foto gagal.',
@@ -274,7 +350,21 @@ class ApiController {
       );
     }
 
-    return _readObjectPayload(decoded);
+    return _readPhotoObjectPayload(decoded);
+  }
+
+  Future<List<RemotePhotoRecord>> uploadPhotos({
+    required List<File> files,
+    required String albumId,
+  }) async {
+    final uploaded = <RemotePhotoRecord>[];
+    for (final file in files) {
+      if (!file.existsSync()) {
+        continue;
+      }
+      uploaded.add(await uploadPhoto(file: file, albumId: albumId));
+    }
+    return uploaded;
   }
 
   Future<SyncSummary> syncAll({
@@ -282,6 +372,7 @@ class ApiController {
   }) async {
     var templatesFetched = 0;
     var backgroundsDownloaded = 0;
+    var backgroundsDeleted = 0;
     var uploadsUploaded = 0;
     String? resolvedAlbumName;
 
@@ -290,7 +381,9 @@ class ApiController {
     } catch (_) {}
 
     try {
-      backgroundsDownloaded = await syncBackgrounds();
+      final backgroundSyncSummary = await syncBackgrounds();
+      backgroundsDownloaded = backgroundSyncSummary.downloaded;
+      backgroundsDeleted = backgroundSyncSummary.deleted;
     } catch (_) {}
 
     try {
@@ -307,6 +400,7 @@ class ApiController {
     return SyncSummary(
       templatesFetched: templatesFetched,
       backgroundsDownloaded: backgroundsDownloaded,
+      backgroundsDeleted: backgroundsDeleted,
       uploadsUploaded: uploadsUploaded,
       uploadsQueued: await pendingUploadCount(),
       albumName: resolvedAlbumName,
@@ -320,17 +414,47 @@ class ApiController {
     required String layoutMode,
     required String accentColor,
   }) async {
-    return createTemplate(
-      name: name,
-      data: {
-        'layoutId': layoutId,
-        'photoCount': photoCount,
-        'layoutMode': layoutMode,
-        'orientation': layoutMode,
-        'accentColor': accentColor,
-        'source': 'photobooth-layout-selection',
-        'syncedAt': DateTime.now().toIso8601String(),
+    final templates = await fetchTemplates();
+    final normalizedLayoutId = layoutId.trim();
+    final normalizedName = name.trim();
+    final existingIndex = templates.indexWhere(
+      (template) {
+        final templateLayoutId = template.raw['layoutId']?.toString().trim();
+        final templateName = template.name.trim();
+        return templateLayoutId == normalizedLayoutId || templateName == normalizedName;
       },
+    );
+
+    final payload = {
+      'layoutId': normalizedLayoutId,
+      'photoCount': photoCount,
+      'layoutMode': layoutMode,
+      'orientation': layoutMode,
+      'accentColor': accentColor,
+      'source': 'photobooth-layout-selection',
+      'syncedAt': DateTime.now().toIso8601String(),
+    };
+
+    if (existingIndex >= 0) {
+      final existingTemplate = templates[existingIndex];
+      if (existingTemplate.id == null || existingTemplate.id!.trim().isEmpty) {
+        return createTemplate(
+          name: normalizedName,
+          data: payload,
+        );
+      }
+      return _putJson(
+        'templates/${existingTemplate.id}',
+        {
+          'name': normalizedName,
+          'data': payload,
+        },
+      );
+    }
+
+    return createTemplate(
+      name: normalizedName,
+      data: payload,
     );
   }
 
@@ -418,8 +542,30 @@ class ApiController {
     required String filePath,
     required String albumName,
   }) async {
-    final file = File(filePath);
-    if (!file.existsSync()) {
+    await uploadOrQueuePhotos(
+      filePaths: [filePath],
+      albumName: albumName,
+    );
+  }
+
+  Future<void> uploadOrQueuePhotos({
+    required List<String> filePaths,
+    required String albumName,
+  }) async {
+    final files = <File>[];
+    final seenPaths = <String>{};
+    for (final filePath in filePaths) {
+      if (!seenPaths.add(filePath)) {
+        continue;
+      }
+      final file = File(filePath);
+      if (!file.existsSync()) {
+        continue;
+      }
+      files.add(file);
+    }
+
+    if (files.isEmpty) {
       return;
     }
 
@@ -428,10 +574,23 @@ class ApiController {
       if (albumId == null || albumId.trim().isEmpty) {
         throw StateError('Album ID tidak tersedia.');
       }
-      await uploadPhoto(file: file, albumId: albumId);
-      await _removeQueuedUpload(filePath);
+
+      for (final file in files) {
+        try {
+          await uploadPhoto(file: file, albumId: albumId);
+          await _removeQueuedUpload(file.path);
+        } catch (_) {
+          await queuePhotoUpload(
+            filePath: file.path,
+            albumName: albumName,
+            albumId: albumId,
+          );
+        }
+      }
     } catch (_) {
-      await queuePhotoUpload(filePath: filePath, albumName: albumName);
+      for (final file in files) {
+        await queuePhotoUpload(filePath: file.path, albumName: albumName);
+      }
     }
   }
 
@@ -560,6 +719,29 @@ class ApiController {
       return data.cast<String, dynamic>();
     }
     return response;
+  }
+
+  RemotePhotoRecord _readPhotoObjectPayload(Map<String, dynamic> response) {
+    final data = response['data'];
+    final item = data is Map<String, dynamic>
+        ? data
+        : data is Map
+            ? data.cast<String, dynamic>()
+            : response;
+
+    return RemotePhotoRecord(
+      raw: item,
+      id: item['id']?.toString(),
+      albumId: item['albumId']?.toString(),
+      filename: item['filename']?.toString(),
+      originalUrl: item['originalUrl']?.toString(),
+      mediumUrl: item['mediumUrl']?.toString(),
+      thumbnailUrl: item['thumbnailUrl']?.toString(),
+      width: int.tryParse(item['width']?.toString() ?? ''),
+      height: int.tryParse(item['height']?.toString() ?? ''),
+      createdAt: DateTime.tryParse(item['createdAt']?.toString() ?? ''),
+      album: item['album'] is Map ? (item['album'] as Map).cast<String, dynamic>() : null,
+    );
   }
 
   String _sanitizeFileName(String value) {

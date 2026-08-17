@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
@@ -272,6 +273,7 @@ class CameraManagerService extends ChangeNotifier {
       await Future<void>.delayed(const Duration(milliseconds: 700));
       await _runCommand(['capture', destination.path], allowWebFallback: true);
       final capturedPath = await _resolveCapturedFile(destination, captureStartedAt);
+      await _waitForValidCapturedFile(File(capturedPath));
       _isCapturing = false;
       _status = 'Photo captured';
       notifyListeners();
@@ -282,7 +284,7 @@ class CameraManagerService extends ChangeNotifier {
       notifyListeners();
       throw AppError(
         code: 'CAM003',
-        cause: 'Capture failed.',
+        cause: error.toString(),
         solution: 'Retry capture after reconnecting the camera.',
         autoFix: 'Retry Capture',
         retryable: true,
@@ -499,7 +501,7 @@ class CameraManagerService extends ChangeNotifier {
 
     final directory = Directory(p.dirname(destination.path));
     final destinationBaseName = p.basenameWithoutExtension(destination.path).toLowerCase();
-    for (var attempt = 0; attempt < 40; attempt++) {
+    for (var attempt = 0; attempt < 80; attempt++) {
       final candidates = _findCaptureCandidates(directory, captureStartedAt, destinationBaseName);
       if (candidates.isNotEmpty) {
         return candidates.first.path;
@@ -508,6 +510,44 @@ class CameraManagerService extends ChangeNotifier {
     }
 
     throw StateError('Captured file was not created.');
+  }
+
+  Future<void> _waitForValidCapturedFile(File file) async {
+    // Tunggu sampai file benar-benar stabil dan bisa didekode sebagai image.
+    var lastSize = -1;
+    for (var attempt = 0; attempt < 60; attempt++) {
+      if (!await file.exists()) {
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        continue;
+      }
+
+      final size = await file.length();
+      final isStable = size > 0 && size == lastSize;
+      if (isStable && await _isDecodableImage(file)) {
+        return;
+      }
+
+      lastSize = size;
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    }
+
+    throw StateError('Captured file was not stable or valid.');
+  }
+
+  Future<bool> _isDecodableImage(File file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) {
+        return false;
+      }
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      frame.image.dispose();
+      codec.dispose();
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   List<File> _findCaptureCandidates(
@@ -529,7 +569,7 @@ class CameraManagerService extends ChangeNotifier {
         })
         .where((file) {
           final stat = file.statSync();
-          return stat.modified.isAfter(captureStartedAt.subtract(const Duration(seconds: 2)));
+          return stat.modified.isAfter(captureStartedAt.subtract(const Duration(seconds: 8)));
         })
         .toList();
 

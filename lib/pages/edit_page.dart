@@ -3,8 +3,10 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 import 'package:window_manager/window_manager.dart';
@@ -43,6 +45,7 @@ class _EditPageState extends State<EditPage> {
   String? _exportedFilePath;
   String? _lastSyncMessage;
   ui.Image? _previewImage;
+  String? _previewErrorMessage;
   int _previewRenderToken = 0;
   Timer? _previewRefreshTimer;
   late final _TemplateLayoutSpec? _apiTemplateLayoutSpec;
@@ -194,6 +197,7 @@ try {
         if (byteData == null) {
           throw StateError('Gagal membuat data PNG untuk export.');
         }
+        final exportBytes = _compressExportImage(byteData.buffer.asUint8List());
 
         final outputDirectory = Directory(widget.takeFolderPath);
         if (!outputDirectory.existsSync()) {
@@ -202,12 +206,12 @@ try {
         final outFile = File(
           p.join(
             widget.takeFolderPath,
-            'exported_layout_${DateTime.now().millisecondsSinceEpoch}.png',
+            'exported_layout_${DateTime.now().millisecondsSinceEpoch}.jpg',
           ),
         );
-        await outFile.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+        await outFile.writeAsBytes(exportBytes, flush: true);
         _exportedFilePath = outFile.path;
-        await _queueOrUploadExportedPhoto(outFile.path);
+        await _queueOrUploadSessionPhotos(outFile.path);
         return outFile.path;
       } finally {
         for (final image in decodedPhotos) {
@@ -221,16 +225,30 @@ try {
     }
   }
 
-  Future<void> _queueOrUploadExportedPhoto(String path) async {
+  Future<void> _queueOrUploadSessionPhotos(String exportedPath) async {
     try {
       final api = context.read<ApiController>();
-      await api.uploadOrQueuePhoto(
-        filePath: path,
+      final uploadPaths = <String>[
+        ...widget.photoPaths,
+        exportedPath,
+      ];
+      await api.uploadOrQueuePhotos(
+        filePaths: uploadPaths,
         albumName: widget.takeFolderName,
       );
     } catch (_) {
       // Upload offline tidak boleh mengganggu alur edit; file sudah aman tersimpan lokal.
     }
+  }
+
+  Uint8List _compressExportImage(Uint8List pngBytes) {
+    final decoded = img.decodeImage(pngBytes);
+    if (decoded == null) {
+      throw StateError('Gagal mengompresi hasil export.');
+    }
+
+    // JPEG jauh lebih kecil daripada PNG untuk layout foto yang penuh warna.
+    return Uint8List.fromList(img.encodeJpg(decoded, quality: 86));
   }
 
   Future<ui.Image> _decodeUiImage(
@@ -1746,6 +1764,36 @@ try {
       );
     }
 
+    final previewError = _previewErrorMessage;
+    if (previewError != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.warning_amber_rounded, color: Color(0xFFFF8A5B), size: 42),
+              const SizedBox(height: 16),
+              Text(
+                'Preview gagal dirender',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                previewError,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white70, height: 1.35),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -1781,12 +1829,14 @@ try {
       final previous = _previewImage;
       setState(() {
         _previewImage = image;
+        _previewErrorMessage = null;
         _isPreviewRendering = false;
       });
       previous?.dispose();
     }).catchError((error, stackTrace) {
       if (!mounted || renderToken != _previewRenderToken) return;
       setState(() {
+        _previewErrorMessage = error.toString();
         _isPreviewRendering = false;
       });
     });

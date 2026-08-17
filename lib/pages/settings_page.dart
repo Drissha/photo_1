@@ -81,11 +81,13 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _isSyncingData = true);
     try {
       final api = context.read<ApiController>();
-      final downloaded = await api.syncBackgrounds();
+      final summary = await api.syncBackgrounds();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Sync selesai. $downloaded background disimpan ke folder background lokal.'),
+          content: Text(
+            'Sync selesai. ${summary.downloaded} background disimpan dan ${summary.deleted} background lama dihapus.',
+          ),
         ),
       );
     } catch (error) {

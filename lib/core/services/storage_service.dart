@@ -138,10 +138,15 @@ class StorageService {
     );
   }
 
-  Future<String> createTakeFolder(String baseFolder) async {
+  Future<String> createTakeFolder(
+    String baseFolder, {
+    required String takeName,
+  }) async {
     final folder = await ensureSaveDirectory(baseFolder);
-    final stamp = DateTime.now().microsecondsSinceEpoch;
-    final takePath = p.join(folder.path, 'Take_$stamp');
+    final stamp = _buildDateStamp(DateTime.now());
+    final sanitizedName = _sanitizeFolderSegment(takeName);
+    final folderName = sanitizedName.isEmpty ? 'Take_$stamp' : '${sanitizedName}_${stamp}take';
+    final takePath = p.join(folder.path, folderName);
     await Directory(takePath).create(recursive: true);
     return takePath;
   }
@@ -246,5 +251,18 @@ class StorageService {
     } catch (_) {
       return BackgroundCategory.portrait;
     }
+  }
+
+  String _sanitizeFolderSegment(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]+'), ' ');
+    final collapsed = normalized.replaceAll(RegExp(r'\s+'), '_');
+    return collapsed.replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+  }
+
+  String _buildDateStamp(DateTime dateTime) {
+    final year = dateTime.year.toString().padLeft(4, '0');
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    return '$year$month$day';
   }
 }

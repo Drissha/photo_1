@@ -86,7 +86,10 @@ class _CameraControlsCardState extends State<CameraControlsCard> {
                   onPressed: () async {
                     final settings = context.read<AppSettingsNotifier>().settings;
                     final storageService = context.read<StorageService>();
-                    final takeFolder = await storageService.createTakeFolder(settings.saveFolderPath);
+                    final takeFolder = await storageService.createTakeFolder(
+                      settings.saveFolderPath,
+                      takeName: 'Quick Capture',
+                    );
                     final path = await widget.cameraManager.capturePhoto(takeFolder);
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved $path')));

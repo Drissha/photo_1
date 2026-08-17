@@ -190,7 +190,10 @@ class _HomePageState extends State<HomePage> {
 
     setState(() => _isCaptureSessionRunning = true);
     try {
-      final takeFolder = await storageService.createTakeFolder(settings.saveFolderPath);
+      final takeFolder = await storageService.createTakeFolder(
+        settings.saveFolderPath,
+        takeName: widget.packageName,
+      );
       if (!mounted) return;
       final savedPaths = <String>[];
       for (var index = 0; index < options.photoCount; index++) {
@@ -242,6 +245,7 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (mounted) {
+        final navigator = Navigator.of(context, rootNavigator: true);
         await Future<void>.delayed(Duration.zero);
         if (!mounted) return;
 
@@ -254,7 +258,7 @@ class _HomePageState extends State<HomePage> {
             layoutTemplateData: widget.layoutTemplateData,
           ),
         );
-        await Navigator.of(context, rootNavigator: true).push(route);
+        await navigator.push(route);
       }
     } catch (error) {
       if (mounted) {

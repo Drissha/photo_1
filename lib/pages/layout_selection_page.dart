@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -33,6 +34,8 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
   bool _isLoadingLayouts = false;
   int _remoteTemplateCount = 0;
   String? _lastSyncMessage;
+  Timer? _lastSyncMessageTimer;
+  late final TextEditingController _takeNameController;
   late String _selectedLayoutId;
   List<_LayoutOption> _layouts = _defaultLayouts;
 
@@ -103,34 +106,12 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
   void initState() {
     super.initState();
     // Sync fullscreen dilakukan setelah frame pertama agar window manager sudah siap.
+    _takeNameController = TextEditingController(text: widget.packageName);
     _selectedLayoutId = widget.initialBackgroundKey;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncFullscreenState();
-      _loadCachedLayouts();
       _loadLayoutsFromApi();
     });
-  }
-
-  Future<void> _loadCachedLayouts() async {
-    try {
-      final api = context.read<ApiController>();
-      final cachedTemplates = await api.loadCachedTemplates();
-      if (!mounted || cachedTemplates.isEmpty) return;
-
-      final cachedLayouts = cachedTemplates.map(_layoutFromTemplate).whereType<_LayoutOption>().toList();
-      if (cachedLayouts.isEmpty) return;
-
-      setState(() {
-        _layouts = cachedLayouts;
-        if (!_layouts.any((layout) => layout.id == _selectedLayoutId)) {
-          _selectedLayoutId = _layouts.first.id;
-        }
-        _remoteTemplateCount = cachedLayouts.length;
-        _lastSyncMessage = 'Layout cache lokal siap dipakai offline';
-      });
-    } catch (_) {
-      // Kalau cache gagal dibaca, layout default tetap dipakai.
-    }
   }
 
   Future<void> _loadLayoutsFromApi() async {
@@ -142,7 +123,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
       final templates = await api.fetchTemplatesWithCache();
       if (!mounted) return;
 
-      final remoteLayouts = templates.map(_layoutFromTemplate).whereType<_LayoutOption>().toList();
+      final remoteLayouts = _dedupeLayouts(templates.map(_layoutFromTemplate).whereType<_LayoutOption>());
       if (remoteLayouts.isNotEmpty) {
         setState(() {
           _layouts = remoteLayouts;
@@ -150,20 +131,20 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
             _selectedLayoutId = _layouts.first.id;
           }
           _remoteTemplateCount = remoteLayouts.length;
-          _lastSyncMessage = 'Layout dimuat dari API dan cache';
         });
+        _showTransientMessage('Layout dimuat dari API dan cache');
       } else {
         setState(() {
           _layouts = _defaultLayouts;
-          _lastSyncMessage = 'Layout fallback dipakai dari storage lokal';
         });
+        _showTransientMessage('Layout fallback dipakai dari storage lokal');
       }
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _layouts = _defaultLayouts;
-        _lastSyncMessage = 'Offline: layout diambil dari cache/fallback';
       });
+      _showTransientMessage('Offline: layout diambil dari cache/fallback');
     } finally {
       if (mounted) {
         setState(() => _isLoadingLayouts = false);
@@ -194,29 +175,29 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
 
     try {
       final api = context.read<ApiController>();
+      final previousLayouts = List<_LayoutOption>.from(_layouts);
       final templates = await api.fetchTemplatesWithCache();
-      final remoteLayouts = templates.map(_layoutFromTemplate).whereType<_LayoutOption>().toList();
-      if (remoteLayouts.isNotEmpty && mounted) {
-        setState(() {
-          _layouts = remoteLayouts;
-          if (!_layouts.any((layout) => layout.id == _selectedLayoutId)) {
-            _selectedLayoutId = _layouts.first.id;
-          }
-        });
-      }
-      await api.syncCurrentLayout(
-        layoutId: _selectedLayout.id,
-        name: _selectedLayout.title,
-        photoCount: _selectedLayout.photoCount,
-        layoutMode: _selectedLayout.layoutMode,
-        accentColor: '#${_selectedLayout.accentColor.value.toRadixString(16).padLeft(8, '0')}',
-      );
-
+      final remoteLayouts = _dedupeLayouts(templates.map(_layoutFromTemplate).whereType<_LayoutOption>());
       if (!mounted) return;
+
+      final nextLayouts = remoteLayouts.isNotEmpty ? remoteLayouts : _defaultLayouts;
+      final previousIds = previousLayouts.map((layout) => layout.id).toSet();
+      final nextIds = remoteLayouts.map((layout) => layout.id).toSet();
+      final addedCount = nextIds.difference(previousIds).length;
+      final removedCount = previousIds.difference(nextIds).length;
+
       setState(() {
+        _layouts = nextLayouts;
+        if (!_layouts.any((layout) => layout.id == _selectedLayoutId)) {
+          _selectedLayoutId = _layouts.first.id;
+        }
         _remoteTemplateCount = remoteLayouts.length;
-        _lastSyncMessage = 'Sync layout selesai: ${remoteLayouts.length} template disimpan ke storage';
       });
+      _showTransientMessage(
+        remoteLayouts.isNotEmpty
+            ? 'Sync layout selesai: +$addedCount / -$removedCount template disesuaikan dari server'
+            : 'Sync layout selesai: server kosong, layout default dipakai',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(_lastSyncMessage!)),
       );
@@ -236,8 +217,65 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
     setState(() => _showUtilityMenu = !_showUtilityMenu);
   }
 
+  void _showTransientMessage(String message) {
+    _lastSyncMessageTimer?.cancel();
+    if (!mounted) return;
+    setState(() => _lastSyncMessage = message);
+    _lastSyncMessageTimer = Timer(const Duration(seconds: 4), () {
+      if (!mounted) return;
+      setState(() => _lastSyncMessage = null);
+    });
+  }
+
   _LayoutOption get _selectedLayout =>
       _layouts.firstWhere((layout) => layout.id == _selectedLayoutId, orElse: () => _layouts.first);
+
+  String get _takeNameValue {
+    final value = _takeNameController.text.trim();
+    return value.isEmpty ? widget.packageName.trim() : value;
+  }
+
+  String _takeFolderPreview() {
+    final safeName = _sanitizeTakeName(_takeNameValue);
+    final dateStamp = _buildDateStamp(DateTime.now());
+    return safeName.isEmpty ? 'Take_${dateStamp}take' : '${safeName}_${dateStamp}take';
+  }
+
+  String _sanitizeTakeName(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]+'), ' ');
+    final collapsed = normalized.replaceAll(RegExp(r'\s+'), '_');
+    return collapsed.replaceAll(RegExp(r'_+'), '_').replaceAll(RegExp(r'^_+|_+$'), '');
+  }
+
+  String _buildDateStamp(DateTime dateTime) {
+    final year = dateTime.year.toString().padLeft(4, '0');
+    final month = dateTime.month.toString().padLeft(2, '0');
+    final day = dateTime.day.toString().padLeft(2, '0');
+    return '$year$month$day';
+  }
+
+  List<_LayoutOption> _dedupeLayouts(Iterable<_LayoutOption> layouts) {
+    final seen = <String>{};
+    final uniqueLayouts = <_LayoutOption>[];
+
+    for (final layout in layouts) {
+      // Beberapa template bisa punya ID berbeda tetapi isinya sama persis.
+      // Pakai signature visual supaya kartu yang sama tidak muncul dua kali.
+      final visualKey = [
+        layout.title.trim().toLowerCase(),
+        layout.photoCount,
+        layout.orientation.name,
+        layout.layoutMode.trim().toLowerCase(),
+        layout.accentColor.toARGB32(),
+      ].join('|');
+      if (!seen.add(visualKey)) {
+        continue;
+      }
+      uniqueLayouts.add(layout);
+    }
+
+    return uniqueLayouts;
+  }
 
   _LayoutOption? _layoutFromTemplate(RemoteTemplateRecord template) {
     final rawData = template.raw['data'];
@@ -383,7 +421,7 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
     await Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => HomePage(
-          packageName: _selectedLayout.title,
+          packageName: _takeNameValue,
           photoCount: _selectedLayout.photoCount,
           initialBackgroundKey: _selectedLayout.layoutMode,
           layoutTemplateData: _selectedLayout.templateData,
@@ -397,140 +435,153 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
   }
 
   @override
+  void dispose() {
+    _lastSyncMessageTimer?.cancel();
+    _takeNameController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Layout chooser dibuat visual agar cepat dibandingkan antar template.
     final selectedLayout = _selectedLayout;
 
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0B1020),
-              Color(0xFF12192C),
-              Color(0xFF06080F),
-            ],
+      body: Stack(
+        fit: StackFit.expand,
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0xFF0B1020),
+                  Color(0xFF12192C),
+                  Color(0xFF06080F),
+                ],
+              ),
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 1120;
-                final hero = _buildHero(context, selectedLayout);
-                final chooser = _buildChooser(context);
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 1120;
+                  final hero = _buildHero(context, selectedLayout);
+                  final chooser = _buildChooser(context);
 
-                return Stack(
-                  children: [
-                    Positioned.fill(
-                      child: isWide
-                          ? Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Expanded(flex: 10, child: hero),
-                                const SizedBox(width: 24),
-                                Expanded(flex: 11, child: chooser),
-                              ],
-                            )
-                          : Column(
-                              children: [
-                                Expanded(child: hero),
-                                const SizedBox(height: 24),
-                                Expanded(child: chooser),
-                              ],
-                            ),
-                    ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      child: SafeArea(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.end,
+                  return isWide
+                      ? Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            FloatingActionButton.extended(
-                              onPressed: _toggleUtilityMenu,
-                              icon: Icon(_showUtilityMenu ? Icons.close : Icons.menu),
-                              label: Text(_showUtilityMenu ? 'Close Menu' : 'Menu'),
-                            ),
-                            AnimatedSize(
-                              duration: const Duration(milliseconds: 220),
-                              curve: Curves.easeInOut,
-                              child: _showUtilityMenu
-                                  ? Padding(
-                                      padding: const EdgeInsets.only(top: 12),
-                                      child: Material(
-                                        color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
-                                        elevation: 14,
-                                        borderRadius: BorderRadius.circular(24),
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(maxWidth: 240),
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(12),
-                                            child: Column(
-                                              mainAxisSize: MainAxisSize.min,
-                                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                                              children: [
-                                                FilledButton.tonalIcon(
-                                                  onPressed: _isSyncingData ? null : _syncRemoteData,
-                                                  icon: _isSyncingData
-                                                      ? const SizedBox(
-                                                          width: 18,
-                                                          height: 18,
-                                                          child: CircularProgressIndicator(strokeWidth: 2),
-                                                        )
-                                                      : const Icon(Icons.sync),
-                                                  label: Text(_isSyncingData ? 'Syncing...' : 'Sync Data'),
-                                                ),
-                                                const SizedBox(height: 10),
-                                                FilledButton.tonalIcon(
-                                                  onPressed: _toggleFullscreen,
-                                                  icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
-                                                  label: Text(_isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'),
-                                                ),
-                                                const SizedBox(height: 10),
-                                                FilledButton.tonalIcon(
-                                                  onPressed: _exitApp,
-                                                  icon: const Icon(Icons.power_settings_new),
-                                                  label: const Text('Exit App'),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    )
-                                  : const SizedBox.shrink(),
-                            ),
-                            if (_lastSyncMessage != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 12),
-                                child: Container(
+                            Expanded(flex: 10, child: hero),
+                            const SizedBox(width: 24),
+                            Expanded(flex: 11, child: chooser),
+                          ],
+                        )
+                      : Column(
+                          children: [
+                            Expanded(child: hero),
+                            const SizedBox(height: 24),
+                            Expanded(child: chooser),
+                          ],
+                        );
+                },
+              ),
+            ),
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 4, right: 4),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Material(
+                      color: Colors.transparent,
+                      child: FloatingActionButton.extended(
+                        onPressed: _toggleUtilityMenu,
+                        icon: Icon(_showUtilityMenu ? Icons.close : Icons.menu),
+                        label: Text(_showUtilityMenu ? 'Close Menu' : 'Menu'),
+                      ),
+                    ),
+                    AnimatedSize(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeInOut,
+                      child: _showUtilityMenu
+                          ? Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Material(
+                                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.96),
+                                elevation: 14,
+                                borderRadius: BorderRadius.circular(24),
+                                child: ConstrainedBox(
                                   constraints: const BoxConstraints(maxWidth: 240),
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: Text(
-                                    '$_lastSyncMessage\nRemote templates: $_remoteTemplateCount',
-                                    style: const TextStyle(color: Colors.white70),
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(12),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        FilledButton.tonalIcon(
+                                          onPressed: _isSyncingData ? null : _syncRemoteData,
+                                          icon: _isSyncingData
+                                              ? const SizedBox(
+                                                  width: 18,
+                                                  height: 18,
+                                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                                )
+                                              : const Icon(Icons.sync),
+                                          label: Text(_isSyncingData ? 'Syncing...' : 'Sync Data'),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        FilledButton.tonalIcon(
+                                          onPressed: _toggleFullscreen,
+                                          icon: Icon(_isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
+                                          label: Text(_isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'),
+                                        ),
+                                        const SizedBox(height: 10),
+                                        FilledButton.tonalIcon(
+                                          onPressed: _exitApp,
+                                          icon: const Icon(Icons.power_settings_new),
+                                          label: const Text('Exit App'),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                          ],
+                            )
+                          : const SizedBox.shrink(),
+                    ),
+                    if (_lastSyncMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Container(
+                          constraints: const BoxConstraints(maxWidth: 240),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.92),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '$_lastSyncMessage\nRemote templates: $_remoteTemplateCount',
+                            style: const TextStyle(color: Colors.white70),
+                          ),
                         ),
                       ),
-                    ),
                   ],
-                );
-              },
+                ),
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -597,6 +648,58 @@ class _LayoutSelectionPageState extends State<LayoutSelectionPage> {
                       color: Colors.white70,
                       height: 1.5,
                     ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Nama take',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            color: Colors.white60,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _takeNameController,
+                      onChanged: (_) => setState(() {}),
+                      textInputAction: TextInputAction.done,
+                      textCapitalization: TextCapitalization.words,
+                      decoration: InputDecoration(
+                        hintText: 'Contoh: Family Party',
+                        filled: true,
+                        fillColor: Colors.black.withValues(alpha: 0.20),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(18),
+                          borderSide: const BorderSide(color: Color(0xFFFFC857), width: 1.4),
+                        ),
+                      ),
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Folder hasil: ${_takeFolderPreview()}',
+                      style: const TextStyle(color: Colors.white70, height: 1.3),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
