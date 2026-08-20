@@ -145,8 +145,18 @@ class StorageService {
     final folder = await ensureSaveDirectory(baseFolder);
     final stamp = _buildDateStamp(DateTime.now());
     final sanitizedName = _sanitizeFolderSegment(takeName);
-    final folderName = sanitizedName.isEmpty ? 'Take_$stamp' : '${sanitizedName}_${stamp}take';
-    final takePath = p.join(folder.path, folderName);
+    final baseFolderName = sanitizedName.isEmpty ? 'Take_$stamp' : '${sanitizedName}_$stamp';
+
+    // Kalau nama folder sudah dipakai, naikkan suffix "+ N" supaya sesi baru tetap tersimpan aman.
+    var folderName = baseFolderName;
+    var duplicateIndex = 1;
+    var takePath = p.join(folder.path, folderName);
+    while (Directory(takePath).existsSync()) {
+      folderName = '$baseFolderName + $duplicateIndex';
+      takePath = p.join(folder.path, folderName);
+      duplicateIndex += 1;
+    }
+
     await Directory(takePath).create(recursive: true);
     return takePath;
   }

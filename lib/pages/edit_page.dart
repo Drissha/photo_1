@@ -108,16 +108,18 @@ class _EditPageState extends State<EditPage> {
 
   Future<void> _returnToStart() async {
     if (_isReturning || !mounted) return;
-    _isReturning = true;
+    setState(() => _isReturning = true);
 
     try {
       await _exportEditedLayout();
     } catch (error) {
       if (mounted) {
+        setState(() => _isReturning = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Export hasil edit gagal: $error')),
         );
       }
+      return;
     }
 
     if (!mounted) return;
@@ -1559,6 +1561,8 @@ try {
     };
   }
 
+  bool get _isSavingResult => _isExporting || _isReturning;
+
   String _backgroundCategoryLabel(BackgroundCategory category) {
     return switch (category) {
       BackgroundCategory.portrait => 'Portrait',
@@ -1691,6 +1695,29 @@ try {
                       ),
                     ],
                   ),
+                ),
+              ),
+              Positioned.fill(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, animation) {
+                    final scale = Tween<double>(begin: 0.96, end: 1.0).animate(
+                      CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+                    );
+                    return FadeTransition(
+                      opacity: animation,
+                      child: ScaleTransition(scale: scale, child: child),
+                    );
+                  },
+                  child: (_isSavingResult || _isSyncingData)
+                      ? _buildLoadingOverlay(
+                          key: const ValueKey('busy-overlay'),
+                          title: _isSavingResult ? 'Menyimpan hasil edit' : 'Sync data',
+                          subtitle: _isSavingResult
+                              ? 'Sedang memproses dan menyimpan file hasil edit...'
+                              : 'Sedang menyinkronkan background dan data sesi...',
+                        )
+                      : const SizedBox.shrink(key: ValueKey('idle-overlay')),
                 ),
               ),
             ],
@@ -2702,6 +2729,7 @@ try {
 
   Widget _buildToolsCard(BuildContext context) {
     // Panel tools ini jadi tempat cepat untuk background, tone, dan aksi final.
+    final isSavingResult = _isSavingResult;
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -2727,17 +2755,20 @@ try {
           const SizedBox(height: 18),
           _buildEditActionChip(
             icon: _isSyncingData ? Icons.sync_problem_outlined : Icons.sync_outlined,
-            title: _isSyncingData ? 'Sync data...' : 'Sync data',
-            subtitle: _lastSyncMessage ?? 'Download background dan upload antrian offline',
+            title: _isSyncingData ? 'Refreshing Data...' : 'Refresh Data',
+            subtitle: _isSyncingData
+                ? 'Sedang menyegarkan background dan upload antrian...'
+                : (_lastSyncMessage ?? 'Download background dan upload antrian offline'),
             onTap: _isSyncingData ? () {} : () => _syncRemoteData(),
+            isBusy: _isSyncingData,
           ),
-          const SizedBox(height: 10),
-          _buildEditActionChip(
-            icon: Icons.auto_fix_high_outlined,
-            title: 'Auto retouch',
-            subtitle: 'Clean up look',
-            onTap: () {},
-          ),
+          // const SizedBox(height: 10),
+          // _buildEditActionChip(
+          //   icon: Icons.auto_fix_high_outlined,
+          //   title: 'Auto retouch',
+          //   subtitle: 'Clean up look',
+          //   onTap: () {},
+          // ),
           const SizedBox(height: 10),
           _buildEditActionChip(
             icon: Icons.photo_filter_outlined,
@@ -2759,13 +2790,13 @@ try {
             subtitle: _selectedTone.label,
             onTap: _chooseColorTone,
           ),
-          const SizedBox(height: 10),
-          _buildEditActionChip(
-            icon: Icons.print_outlined,
-            title: 'Ready to print',
-            subtitle: 'Export preview',
-            onTap: () {},
-          ),
+          // const SizedBox(height: 10),
+          // _buildEditActionChip(
+          //   icon: Icons.print_outlined,
+          //   title: 'Ready to print',
+          //   subtitle: 'Export preview',
+          //   onTap: () {},
+          // ),
           const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.all(18),
@@ -2778,7 +2809,9 @@ try {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Tidak ada auto-return. Tekan tombol di bawah jika sudah selesai.',
+                  isSavingResult
+                      ? 'Sedang menyimpan hasil edit...'
+                      : 'Tidak ada auto-return. Tekan tombol di bawah jika sudah selesai.',
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white70,
@@ -2787,9 +2820,18 @@ try {
                 ),
                 const SizedBox(height: 14),
                 FilledButton.icon(
-                  onPressed: _returnToStart,
-                  icon: const Icon(Icons.home_outlined),
-                  label: const Text('Selesai & Kembali'),
+                  onPressed: isSavingResult ? null : _returnToStart,
+                  icon: isSavingResult
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                          ),
+                        )
+                      : const Icon(Icons.home_outlined),
+                  label: Text(isSavingResult ? 'Menyimpan...' : 'Selesai & Kembali'),
                 ),
               ],
             ),
@@ -2804,6 +2846,7 @@ try {
     required String title,
     required String subtitle,
     required VoidCallback onTap,
+    bool isBusy = false,
   }) {
     return InkWell(
       onTap: onTap,
@@ -2817,7 +2860,17 @@ try {
         ),
         child: Row(
           children: [
-            Icon(icon, color: const Color(0xFFFFD77A), size: 20),
+            if (isBusy)
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFFD77A)),
+                ),
+              )
+            else
+              Icon(icon, color: const Color(0xFFFFD77A), size: 20),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -2843,6 +2896,81 @@ try {
             ),
             const Icon(Icons.chevron_right, color: Colors.white54),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingOverlay({
+    Key? key,
+    required String title,
+    required String subtitle,
+  }) {
+    return IgnorePointer(
+      ignoring: false,
+      child: Container(
+        key: key,
+        color: Colors.black.withValues(alpha: 0.42),
+        child: Center(
+          child: Container(
+            width: 340,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 26),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A).withValues(alpha: 0.96),
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  blurRadius: 30,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 72,
+                  height: 72,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        width: 72,
+                        height: 72,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 4.5,
+                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFFFD77A)),
+                          backgroundColor: Colors.white.withValues(alpha: 0.10),
+                        ),
+                      ),
+                      const Icon(Icons.hourglass_top_rounded, color: Colors.white, size: 30),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    height: 1.45,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
